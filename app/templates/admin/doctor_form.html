@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}{{ heading }} · CarePoint{% endblock %}
+{% block content %}
+<section class="form-card">
+    <p class="eyebrow">Administration</p><h1>{{ heading }}</h1>
+    <form method="post" novalidate>
+        {{ form.hidden_tag() }}
+        <label>{{ form.name.label }}{{ form.name() }}</label>{% for error in form.name.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+        <label>{{ form.email.label }}{{ form.email(autocomplete="email") }}</label>{% for error in form.email.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+        <label>{{ form.phone.label }}{{ form.phone() }}</label>{% for error in form.phone.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+        <label>{{ form.specialty_id.label }}{{ form.specialty_id() }}</label>
+        <label>{{ form.password.label }}{{ form.password(autocomplete="new-password") }}</label>{% for error in form.password.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+        {% if form.password.description %}<small class="muted">{{ form.password.description }}</small>{% endif %}
+        {{ form.submit(class_="button primary") }} <a class="button secondary" href="{{ url_for('admin.doctors') }}">Cancel</a>
+    </form>
+    {% if heading == "Edit doctor" %}<p class="muted">Leave the password blank to keep the existing password.</p>{% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,1400 @@
+CAREPOINT CLINIC MANAGEMENT
+BEGINNER'S STEP-BY-STEP FLASK COURSE: A TO Z
+=====================================================================
+
+ABOUT THIS LESSON
+---------------------------------------------------------------------
+This guide teaches the CarePoint Clinic Management project from the
+beginning. It follows the files that are currently in this project.
+It explains the purpose of each major Python script, how a browser
+request moves through Flask, how the database is connected, and how
+to run and test the application.
+
+Read the lessons in order. Type commands in PowerShell from the
+clinic-management project folder unless a lesson says otherwise.
+
+This project is a learning application. It is not a complete medical
+records system and is not ready for production or real patient data.
+Do not put real medical or personal information into a development
+database.
+
+
+WHAT YOU WILL LEARN
+---------------------------------------------------------------------
+By the end, you should be able to explain and use:
+
+  1. A Python virtual environment and requirements file
+  2. Flask configuration and environment variables
+  3. Flask's application factory pattern
+  4. Flask extensions and SQLAlchemy models
+  5. Relationships and foreign keys
+  6. Alembic database migrations
+  7. Blueprints, routes, and HTTP methods
+  8. Forms, validation, and CSRF protection
+  9. Password hashing, login, sessions, and logout
+ 10. Authentication versus role authorization
+ 11. Object-level permission checks
+ 12. Jinja templates and static CSS
+ 13. Patient booking, doctor workflow, and admin management
+ 14. Automated tests using pytest
+ 15. How to diagnose common errors without guessing
+
+
+THE USER JOURNEY WE ARE BUILDING
+---------------------------------------------------------------------
+
+  Administrator creates doctor account and specialties
+                  |
+                  v
+  Patient registers and receives a patient profile
+                  |
+                  v
+  Patient logs in and requests an appointment
+                  |
+                  v
+  Doctor sees only appointments assigned to that doctor
+                  |
+                  v
+  Doctor changes an appointment status
+                  |
+                  v
+  Patient sees their own appointment and its status
+
+An administrator can also review patients, doctors, specialties, and
+appointments. The server checks permissions; hiding a link in a web
+page is not sufficient security.
+
+
+LESSON 1 - FIND YOUR WAY AROUND THE PROJECT
+---------------------------------------------------------------------
+The project folder is:
+
+  clinic-management\
+
+Important files and folders:
+
+  app\                    Flask application package
+  app\auth\               Registration, login, logout, permission checks
+  app\patient\            Patient dashboard and appointment booking
+  app\doctor\             Doctor dashboard and appointment status updates
+  app\admin\              Admin dashboards and clinic management
+  app\main\               Public home page
+  app\models\             SQLAlchemy database model classes
+  app\templates\          HTML pages rendered by Flask and Jinja
+  app\static\css\         Stylesheet served to the browser
+  migrations\             Alembic database change history
+  tests\                  Automated tests
+  instance\               Local application data, including SQLite DB
+  config.py               Reads settings and environment variables
+  run.py                  Flask application entry point
+  seed_admin.py           One-time, protected administrator creation
+  requirements.txt        Third-party Python package list
+  .env                    Local secrets/settings; do not commit this
+  .env.example            Names of settings to configure
+  README.md               Short setup and run reference
+
+The same word can describe different things:
+
+  - A Python package is usually a folder containing __init__.py.
+  - A Flask Blueprint groups related web routes.
+  - A database table stores rows.
+  - A model class describes a database table to SQLAlchemy.
+
+
+LESSON 2 - PREPARE PYTHON ON WINDOWS
+---------------------------------------------------------------------
+Open PowerShell and change to the project folder:
+
+  cd "C:\Users\DE\Desktop\Current Projects\flask\Health\clinic-management"
+
+Create a virtual environment if one does not already exist:
+
+  py -m venv venv
+
+Activate it in PowerShell:
+
+  .\venv\Scripts\Activate.ps1
+
+Your command prompt should begin with something similar to:
+
+  (venv) C:\Users\DE\...
+
+The virtual environment keeps this application's packages separated
+from other Python projects. If PowerShell blocks activation, the
+project can still be run explicitly with:
+
+  .\venv\Scripts\python.exe run.py
+
+Install the packages listed by the project:
+
+  python -m pip install -r requirements.txt
+
+The current requirements include:
+
+  Flask             Web framework and HTTP request handling
+  Flask-SQLAlchemy  Database ORM integration
+  Flask-Migrate     Alembic migration commands for Flask
+  Flask-WTF         Forms and CSRF protection
+  python-dotenv     Reads settings from .env
+  email-validator   Validates email form fields
+  Werkzeug          Password hashing utilities (also used by Flask)
+  pytest            Automated test runner
+
+Use the project environment's Python so commands use the installed
+project dependencies:
+
+  python -m pytest -q
+
+
+LESSON 3 - ENVIRONMENT SETTINGS AND CONFIGURATION
+---------------------------------------------------------------------
+Files: .env.example and config.py
+
+The .env.example file shows the setting names:
+
+  SECRET_KEY=replace-with-a-long-random-value
+  DATABASE_URL=sqlite:///clinic.db
+  SESSION_COOKIE_SECURE=false
+
+Create a local .env file from this example if you need one:
+
+  Copy-Item .env.example .env
+
+Then replace the sample secret with a long, unique random value.
+Never paste a real secret into lesson.txt, README.md, or source code.
+The .env file is ignored by Git.
+
+config.py reads environment variables:
+
+  import os
+  from dotenv import load_dotenv
+
+  load_dotenv()
+
+  class Config:
+      SECRET_KEY = os.getenv(
+          "SECRET_KEY",
+          "dev-only-change-this-secret-key"
+      )
+
+      SQLALCHEMY_DATABASE_URI = os.getenv(
+          "DATABASE_URL",
+          "sqlite:///clinic.db"
+      )
+
+      SQLALCHEMY_TRACK_MODIFICATIONS = False
+      SESSION_COOKIE_HTTPONLY = True
+      SESSION_COOKIE_SAMESITE = "Lax"
+      SESSION_COOKIE_SECURE = (
+          os.getenv("SESSION_COOKIE_SECURE", "false").lower() == "true"
+      )
+
+Explanation:
+
+  load_dotenv()
+      Reads .env into the process environment for local development.
+
+  SECRET_KEY
+      Flask uses this to sign its session cookie and other protected
+      values. If the key is changed, existing sessions will no longer
+      be valid. The fallback is only for local learning; replace it
+      with a unique secret before exposing the app.
+
+  SQLALCHEMY_DATABASE_URI
+      Tells SQLAlchemy where to store data. The default SQLite URL is
+      local and simple. Do not share a development database between
+      unrelated projects.
+
+  SESSION_COOKIE_HTTPONLY
+      Prevents browser JavaScript from reading the session cookie.
+
+  SESSION_COOKIE_SAMESITE
+      Adds a useful browser restriction against some cross-site
+      requests.
+
+  SESSION_COOKIE_SECURE
+      When true, the browser sends the cookie only over HTTPS. Keep it
+      false on a plain local HTTP server. Set it true only when the
+      deployed site uses HTTPS.
+
+
+LESSON 4 - START THE FLASK APP
+---------------------------------------------------------------------
+Files: run.py and app/__init__.py
+
+run.py is the entry point:
+
+  from app import create_app
+
+  app = create_app()
+
+  if __name__ == "__main__":
+      app.run()
+
+When Python runs run.py directly, it calls create_app() and starts
+Flask's local development server.
+
+Start the project:
+
+  python run.py
+
+Or use the currently active environment's launcher:
+
+  py run.py
+
+Open this address in a browser:
+
+  http://127.0.0.1:5000
+
+The local development server prints a warning that it is not for
+production. That warning is expected. A separate message such as
+"Could not find platform independent libraries <prefix>" can come
+from a misconfigured Python runtime. It is distinct from Flask's
+development-server warning. If the server continues and prints its
+address, it has started; still investigate the Python installation
+if Python commands behave unexpectedly.
+
+Keep this terminal open while using the website. Press Ctrl+C in this
+terminal to stop the development server.
+
+
+LESSON 5 - THE APPLICATION FACTORY
+---------------------------------------------------------------------
+File: app/__init__.py
+
+The main function is create_app():
+
+  def create_app(config_class=Config):
+      app = Flask(__name__)
+      app.config.from_object(config_class)
+
+      db.init_app(app)
+      migrate.init_app(app, db)
+      csrf.init_app(app)
+
+      import_module("app.models")
+
+      from app.auth import auth_bp
+      from app.patient import patient_bp
+      from app.doctor import doctor_bp
+      from app.admin import admin_bp
+      from app.main import main_bp
+
+      app.register_blueprint(main_bp)
+      app.register_blueprint(auth_bp)
+      app.register_blueprint(patient_bp)
+      app.register_blueprint(doctor_bp)
+      app.register_blueprint(admin_bp)
+
+      return app
+
+Important ideas:
+
+  Flask(__name__)
+      Creates a Flask application. __name__ helps Flask find templates
+      and static files relative to the app package.
+
+  app.config.from_object(config_class)
+      Loads settings from Config or a test-specific configuration.
+      Tests use this ability to point at a temporary database.
+
+  db.init_app(app), migrate.init_app(app, db)
+      Attach database and migration extensions to this app instance.
+
+  csrf.init_app(app)
+      Protects state-changing form submissions with CSRF tokens.
+
+  import_module("app.models")
+      Imports all model classes. SQLAlchemy and Flask-Migrate need
+      those model tables registered before generating migrations.
+
+  app.register_blueprint(...)
+      Adds URL groups to the application.
+
+The factory pattern is useful because tests can make a fresh app with
+test-only settings without modifying the real development database.
+
+
+LESSON 6 - SHARED EXTENSIONS
+---------------------------------------------------------------------
+File: app/extensions.py
+
+  from flask_sqlalchemy import SQLAlchemy
+  from flask_migrate import Migrate
+  from flask_wtf import CSRFProtect
+
+  db = SQLAlchemy()
+  migrate = Migrate()
+  csrf = CSRFProtect()
+
+These are unbound extension objects. They are connected to a Flask
+app inside create_app(). This avoids importing the Flask application
+from every model or route and helps avoid circular imports.
+
+A circular import happens when module A imports module B while module
+B is also importing module A before either module has finished
+loading. Keeping extension declarations separate reduces that risk.
+
+
+LESSON 7 - UNDERSTAND THE DATABASE BEFORE CODING ROUTES
+---------------------------------------------------------------------
+The current database tables have these relationships:
+
+  users
+    id, email, password_hash, role, created_at
+       |                         |
+       +---- one patient profile +---- one doctor profile
+
+  patients
+    id, user_id, name, phone
+       |
+       +---- many appointments
+
+  doctors
+    id, user_id, specialty_id, name, phone
+       |              |
+       |              +---- one specialty (optional)
+       +---- many appointments
+
+  specialties
+    id, name, description
+       |
+       +---- many doctors
+
+  appointments
+    id, patient_id, doctor_id, appointment_date, status
+
+The User is the login identity. Patient and Doctor rows are profile
+records. Keeping these separate lets login data and profile data have
+different responsibilities.
+
+A foreign key such as:
+
+  db.ForeignKey("users.id")
+
+means a row points to an existing row in the users table. The column
+that stores the pointer is called the foreign key column.
+
+
+LESSON 8 - READ A SQLALCHEMY MODEL
+---------------------------------------------------------------------
+Files: app/models/user.py, patient.py, doctor.py, specialty.py,
+and appointment.py
+
+An abbreviated model:
+
+  class User(db.Model):
+      __tablename__ = "users"
+
+      id = db.Column(db.Integer, primary_key=True)
+      email = db.Column(
+          db.String(120),
+          unique=True,
+          nullable=False,
+          index=True
+      )
+
+  class Appointment(db.Model):
+      __tablename__ = "appointments"
+
+      id = db.Column(db.Integer, primary_key=True)
+      patient_id = db.Column(
+          db.Integer,
+          db.ForeignKey("patients.id"),
+          nullable=False
+      )
+      doctor_id = db.Column(
+          db.Integer,
+          db.ForeignKey("doctors.id"),
+          nullable=False
+      )
+
+Explanation:
+
+  db.Model
+      Base class SQLAlchemy uses for model classes.
+
+  __tablename__
+      Explicit database table name.
+
+  db.Column
+      Describes one stored field in the table.
+
+  primary_key=True
+      Makes the column the unique row identifier.
+
+  nullable=False
+      Requires the database row to contain a value.
+
+  unique=True
+      Prevents duplicate values in that column.
+
+  index=True
+      Creates a database index to make lookups by that value faster.
+
+  db.ForeignKey(...)
+      Declares a link to the primary key in another table.
+
+  db.relationship(...)
+      Adds a convenient Python object relationship. It lets code use
+      appointment.patient or appointment.doctor instead of manually
+      querying the related object each time.
+
+The User model includes password methods:
+
+  def set_password(self, password):
+      self.password_hash = generate_password_hash(password)
+
+  def check_password(self, password):
+      return check_password_hash(self.password_hash, password)
+
+Never store the original password in the database. Password hashing
+is deliberately one-way: login checks a submitted password against
+the stored hash rather than decrypting a stored password.
+
+The created_at column uses a callable default:
+
+  default=lambda: datetime.now(timezone.utc)
+
+The lambda is evaluated when SQLAlchemy creates a row, not once when
+the Python module is imported.
+
+
+LESSON 9 - RELATIONSHIPS AND PROFILE ACCESS
+---------------------------------------------------------------------
+In Patient:
+
+  user = db.relationship(
+      "User",
+      backref=db.backref(
+          "patient_profile",
+          uselist=False
+      )
+  )
+
+In Doctor:
+
+  user = db.relationship(
+      "User",
+      backref=db.backref(
+          "doctor_profile",
+          uselist=False
+      )
+  )
+
+In Appointment:
+
+  patient = db.relationship("Patient", backref="appointments")
+  doctor = db.relationship("Doctor", backref="appointments")
+
+The backrefs create convenient reverse access:
+
+  user.patient_profile
+  user.doctor_profile
+  patient.appointments
+  doctor.appointments
+
+uselist=False indicates that the back-reference should be one profile
+object rather than a list of profiles.
+
+Relationships make code readable, but they do not replace access
+control. For example, the application still checks appointment
+ownership before showing private appointment data.
+
+
+LESSON 10 - DATABASE MIGRATIONS (ALEMBIC)
+---------------------------------------------------------------------
+Folder: migrations\
+
+A model describes the schema that the Python program expects.
+A migration describes how to change a real database schema.
+
+This project already contains an initial migration in:
+
+  migrations\versions\3b4bf7b52342_create_clinic_tables.py
+
+Do not run "db init" again. It is used once to create a migration
+repository. The migration folder is already initialized.
+
+Apply existing migrations to the configured local database:
+
+  flask --app run.py db upgrade
+
+When a model is changed later:
+
+  flask --app run.py db migrate -m "Describe the schema change"
+  flask --app run.py db upgrade
+
+Meaning:
+
+  db migrate
+      Compares registered models with the current database and writes
+      a proposed migration file.
+
+  Review the new file
+      Autogeneration is a proposal. Check columns, constraints, and
+      upgrade/downgrade operations before using it.
+
+  db upgrade
+      Runs unapplied migrations against the configured database.
+
+  db downgrade
+      Moves backward according to migration instructions. Use with
+      care because data can be lost.
+
+The database URL is loaded from .env. The default SQLite URL stores
+the database under the Flask instance folder. If the file is new or
+empty, the tables are not created merely by starting Flask. You must
+run db upgrade.
+
+That is why an error like:
+
+  sqlite3.OperationalError: no such table: doctors
+
+usually means the app connected to a database whose migrations have
+not been applied. Confirm DATABASE_URL, then run db upgrade against
+that same configuration.
+
+Never fix schema problems by deleting a database that contains data.
+Use migrations and a backup.
+
+
+LESSON 11 - BLUEPRINTS
+---------------------------------------------------------------------
+Folders:
+
+  app\main\
+  app\auth\
+  app\patient\
+  app\doctor\
+  app\admin\
+
+A Blueprint groups related routes and gives them a URL prefix.
+For example, app/auth/__init__.py creates:
+
+  auth_bp = Blueprint(
+      "auth",
+      __name__,
+      url_prefix="/auth"
+  )
+
+Routes registered on this Blueprint may become:
+
+  /auth/register
+  /auth/login
+  /auth/logout
+
+The doctor Blueprint uses "/doctor", the admin Blueprint uses
+"/admin", and the patient Blueprint uses "/patient".
+
+Each Blueprint's __init__.py imports its routes module. That import
+executes the @blueprint.route declarations and registers URL rules.
+
+Blueprints help keep route responsibilities separate. They are not
+permission checks: decorators on the routes must still enforce access.
+
+
+LESSON 12 - ROUTES, URLS, AND HTTP METHODS
+---------------------------------------------------------------------
+In a route:
+
+  @patient_bp.route("/appointments/new", methods=["GET", "POST"])
+  @role_required("patient")
+  def book_appointment():
+      ...
+
+The URL becomes:
+
+  /patient/appointments/new
+
+The two HTTP methods are used for different actions:
+
+  GET
+      Show a page or read data. It should not perform a permanent
+      state change.
+
+  POST
+      Submit data that may create, update, or delete something.
+
+The application uses GET for pages and POST for booking submissions,
+doctor status changes, deletes, and logout.
+
+Use url_for() to build URLs:
+
+  url_for("patient.dashboard")
+
+This uses a Blueprint endpoint name and function name. It is safer
+than hard-coding "/patient/dashboard" because URL changes can be
+handled in one place.
+
+Use redirect(url_for(...)) after successful POST operations. This
+prevents a browser refresh from submitting the same form again.
+
+
+LESSON 13 - FORMS AND VALIDATION
+---------------------------------------------------------------------
+Files: app/auth/forms.py, app/patient/forms.py, app/admin/forms.py
+
+Flask-WTF connects an HTML form to Python fields and validators.
+
+The registration form includes:
+
+  name = StringField(
+      "Name",
+      validators=[DataRequired(), Length(min=2, max=100)]
+  )
+
+  email = StringField(
+      "Email",
+      validators=[DataRequired(), Email()]
+  )
+
+  password_confirmation = PasswordField(
+      "Confirm Password",
+      validators=[DataRequired(), EqualTo("password")]
+  )
+
+The validators reject missing values, malformed email, too-short
+names, and mismatched passwords before route code saves the data.
+
+In a route:
+
+  form = RegistrationForm()
+  if form.validate_on_submit():
+      ...
+
+validate_on_submit() means:
+
+  1. The request is a form submission (normally POST).
+  2. Flask-WTF validates the CSRF token.
+  3. Field validators run.
+  4. The route receives True only when checks pass.
+
+The appointment form's doctor field is a SelectField. The server
+sets its choices from current doctor records before validation:
+
+  form.doctor_id.choices = [
+      (doctor.id, doctor.name)
+      for doctor in doctors
+  ]
+
+This matters because a browser can be manipulated. The server must
+validate the submitted doctor ID, not merely trust the dropdown.
+
+
+LESSON 14 - CSRF PROTECTION
+---------------------------------------------------------------------
+CSRF means Cross-Site Request Forgery. A malicious page might try to
+make a signed-in browser submit a state-changing request without the
+user's intention.
+
+This project initializes CSRFProtect in app/__init__.py. Flask-WTF
+forms include a token with:
+
+  {{ form.hidden_tag() }}
+
+For a plain HTML POST form, include:
+
+  <input
+      type="hidden"
+      name="csrf_token"
+      value="{{ csrf_token() }}"
+  >
+
+This project includes tokens in logout, doctor status, and admin
+delete forms too.
+
+Logout uses POST, not GET, because logout changes authentication
+state. Missing CSRF tokens are expected to receive HTTP 400.
+
+The automated test app disables CSRF for most workflow tests so those
+tests can focus on their specific behavior. A dedicated test leaves
+CSRF enabled and verifies that a tokenless POST is rejected.
+Production CSRF protection remains enabled by the app extension.
+
+
+LESSON 15 - REGISTRATION: FROM FORM TO DATABASE
+---------------------------------------------------------------------
+File: app/auth/routes.py
+URL: /auth/register
+
+The actual registration process is:
+
+  1. Browser sends GET /auth/register.
+  2. Flask creates RegistrationForm and renders the registration page.
+  3. User fills name, email, phone, password, and confirmation.
+  4. Browser sends POST with the form and CSRF token.
+  5. Flask-WTF checks CSRF and validates the fields.
+  6. Route normalizes the email with lower() and strip().
+  7. Route checks whether the email already exists.
+  8. Route creates a User with role="patient".
+  9. set_password() stores a hash, not the submitted password.
+ 10. db.session.flush() sends the new user to the database so it gets
+     an ID, while keeping the transaction open.
+ 11. Route creates a Patient profile using that user ID.
+ 12. db.session.commit() saves the account and profile together.
+ 13. Browser is redirected to login and receives a success message.
+
+Public registration deliberately sets role="patient". Do not add a
+public role dropdown: an attacker could submit role="admin" manually.
+
+The profile and user are associated using:
+
+  Patient(
+      user_id=user.id,
+      name=form.name.data.strip(),
+      phone=form.phone.data.strip()
+  )
+
+This is how the new patient can sign in as a User and display their
+Patient profile.
+
+
+LESSON 16 - LOGIN, PASSWORD VERIFICATION, AND SESSION
+---------------------------------------------------------------------
+File: app/auth/routes.py
+URL: /auth/login
+
+Login flow:
+
+  1. Validate the email and password fields.
+  2. Normalize email to lowercase and remove extra whitespace.
+  3. Query User by email.
+  4. Call user.check_password(submitted_password).
+  5. Reject bad credentials with a generic error message.
+  6. Clear the old session.
+  7. Store user_id and role in the new session.
+  8. Redirect to the dashboard for that role.
+
+Relevant code:
+
+  user = User.query.filter_by(email=email).first()
+
+  if user is None or not user.check_password(form.password.data):
+      flash("Invalid email or password.", "danger")
+
+  session.clear()
+  session["user_id"] = user.id
+  session["role"] = user.role
+
+The session is a signed browser cookie managed by Flask. Its contents
+are protected from undetected modification by SECRET_KEY, but do not
+store passwords or private medical details in the session.
+
+The role redirects are:
+
+  patient -> patient.dashboard
+  doctor  -> doctor.dashboard
+  admin   -> admin.dashboard
+
+If an account contains an unsupported role, login clears the session
+instead of granting access.
+
+
+LESSON 17 - LOGOUT
+---------------------------------------------------------------------
+File: app/auth/routes.py
+URL: /auth/logout
+Method: POST
+
+  session.clear()
+
+This removes user_id, role, and all other session values. The route
+then shows a message and redirects to login.
+
+The visible Log out control is an HTML POST form with a CSRF token.
+A regular GET link is not used because simply viewing a URL should
+not change authentication state.
+
+
+LESSON 18 - AUTHENTICATION AND AUTHORIZATION
+---------------------------------------------------------------------
+File: app/auth/decorators.py
+
+Authentication asks:
+
+  "Is this request associated with a signed-in user?"
+
+Authorization asks:
+
+  "Is this signed-in user allowed to do this action?"
+
+The project provides:
+
+  @login_required
+      Requires user_id in the session.
+
+  @role_required("admin")
+      Requires login and requires the session role to be admin.
+
+Example:
+
+  @admin_bp.route("/doctors")
+  @role_required("admin")
+  def doctors():
+      ...
+
+If a visitor is anonymous, the decorator redirects to login. If a
+signed-in user has the wrong role, it shows an authorization message
+and redirects to the public home page.
+
+Templates hide links that a role does not need to see. This improves
+the user experience, but the server decorator is the security check.
+Always protect the route, even if its link is hidden.
+
+Session roles are established at login. If an administrator changes
+an account's role while that user is already signed in, an old session
+may retain the former role until it is cleared or renewed. This
+learning app does not implement centralized session revocation.
+
+
+LESSON 19 - PATIENT DASHBOARD AND PROFILE
+---------------------------------------------------------------------
+Files: app/patient/routes.py and templates/patient/
+
+Patient dashboard:
+
+  1. Requires role="patient".
+  2. Loads the signed-in User from session["user_id"].
+  3. Joins Appointment with Patient.
+  4. Filters results to the profile whose user_id is the signed-in ID.
+  5. Sorts by appointment date.
+  6. Renders the dashboard with the user's appointments.
+
+The patient profile route similarly loads the current user and checks
+that a patient_profile exists before rendering it.
+
+The profile page displays contact information. Editing the profile is
+not part of the current feature set; the page advises the patient to
+contact the clinic.
+
+
+LESSON 20 - BOOK AN APPOINTMENT
+---------------------------------------------------------------------
+Files: app/patient/forms.py and app/patient/routes.py
+URL: /patient/appointments/new
+Methods: GET and POST
+
+Booking steps:
+
+  1. role_required("patient") protects the route.
+  2. Query available doctors from the database.
+  3. Build the doctor dropdown choices using current doctor rows.
+  4. If there are no doctors, show a useful message.
+  5. On POST, validate CSRF and form fields.
+  6. Reject a date and time that is not in the future.
+  7. Load current user and the associated Patient profile.
+  8. Create an Appointment linked to that patient and doctor.
+  9. Set status to "scheduled".
+ 10. Commit, flash a success message, and redirect to dashboard.
+
+The application expects a local date-time format from the HTML field:
+
+  format="%Y-%m-%dT%H:%M"
+
+The route currently compares the submitted local datetime against
+datetime.now(). This is a simple learning-project approach. A
+production scheduling system should choose a timezone policy, store
+timezone-aware values consistently, and display dates in the user's
+timezone.
+
+Appointment fields were chosen as a sensible implementation for this
+project: patient, doctor, date/time, and status. Always distinguish
+implementation decisions from fields required by a particular course
+or instructor.
+
+
+LESSON 21 - OBJECT-LEVEL AUTHORIZATION
+---------------------------------------------------------------------
+File: app/patient/routes.py
+URL pattern: /patient/appointments/<appointment_id>
+
+Role checks alone are not enough. Every patient has the same role,
+but they must not see one another's appointments.
+
+The detail route:
+
+  1. Loads the requested appointment.
+  2. Loads the signed-in User.
+  3. Compares appointment.patient.user_id with user.id.
+  4. Returns HTTP 403 if they are different.
+  5. Renders details only when the owner matches.
+
+This blocks an ID manipulation attack such as changing:
+
+  /patient/appointments/10
+
+to:
+
+  /patient/appointments/11
+
+The numeric ID is not authorization. The relationship ownership
+check is authorization.
+
+HTTP response meanings:
+
+  200  Request succeeded
+  302  Redirect, commonly to login or another page
+  400  Bad request, such as unknown appointment status or invalid CSRF
+  403  Signed-in user is not allowed to access this object
+  404  Requested object does not exist
+  500  Unexpected server error; inspect the server traceback
+
+
+LESSON 22 - DOCTOR DASHBOARD AND STATUS UPDATES
+---------------------------------------------------------------------
+File: app/doctor/routes.py
+
+The doctor dashboard:
+
+  1. Requires role="doctor".
+  2. Loads the User from the session ID.
+  3. Reads user.doctor_profile.
+  4. Returns 403 if this account has no doctor profile.
+  5. Queries appointments filtered by doctor.id.
+  6. Displays assigned appointments only.
+
+The status update route is POST-only:
+
+  /doctor/appointments/<appointment_id>/status
+
+Before saving, the route checks:
+
+  - The current user has a doctor profile.
+  - The appointment exists.
+  - appointment.doctor_id equals the current doctor's ID.
+  - The submitted status is in the approved list.
+
+Approved values:
+
+  scheduled
+  confirmed
+  completed
+  cancelled
+
+The allowed set is checked on the server. A browser select box alone
+is not enough because a user can submit a hand-crafted request.
+
+
+LESSON 23 - ADMIN DASHBOARD AND MANAGEMENT
+---------------------------------------------------------------------
+Files: app/admin/routes.py and app/admin/forms.py
+
+Every admin route has:
+
+  @role_required("admin")
+
+Admin dashboard:
+
+  - Counts doctors
+  - Counts patients
+  - Counts appointments
+  - Counts specialties
+
+Doctor management:
+
+  /admin/doctors
+      Lists doctor profiles.
+
+  /admin/doctors/new
+      Creates a doctor login and profile. It hashes the password.
+
+  /admin/doctors/<id>/edit
+      Changes doctor details and optionally changes the password.
+      A blank password means keep the current password.
+
+  /admin/doctors/<id>/delete
+      Uses POST. Prevents deletion while appointments remain assigned.
+      Deletes both the profile and its login only when safe.
+
+Specialty management:
+
+  /admin/specialties
+      Lists specialties and accepts a new specialty.
+
+  /admin/specialties/<id>/edit
+      Changes the name or description.
+
+  /admin/specialties/<id>/delete
+      Uses POST. Prevents deleting a specialty while doctors still use it.
+
+Read-only views:
+
+  /admin/patients
+  /admin/appointments
+
+Name and email uniqueness are checked before committing. Database
+constraints are also important because two requests could race; an
+advanced production version should catch a uniqueness conflict,
+rollback, and return a friendly error.
+
+
+LESSON 24 - CREATE THE FIRST ADMINISTRATOR
+---------------------------------------------------------------------
+File: seed_admin.py
+
+Public registration cannot create an administrator. The seed script
+is a separate controlled way to create the first administrator.
+
+Temporarily set environment values in .env:
+
+  ADMIN_EMAIL=owner@example.com
+  ADMIN_PASSWORD=use-a-unique-password-at-least-12-characters
+
+Make sure the database migration has already been applied:
+
+  flask --app run.py db upgrade
+
+Then run:
+
+  python seed_admin.py
+
+The script:
+
+  1. Requires ADMIN_EMAIL and ADMIN_PASSWORD.
+  2. Requires at least 12 characters for the password.
+  3. Refuses to change an existing non-admin account's role.
+  4. Hashes the password through User.set_password().
+  5. Commits a new admin User.
+
+After successfully creating the administrator, remove the temporary
+ADMIN_EMAIL and ADMIN_PASSWORD values from .env. Never publish them or
+put them into source control.
+
+Doctor accounts are created by a signed-in administrator through the
+Doctors page. No default administrator password is built into the
+application.
+
+
+LESSON 25 - JINJA TEMPLATES
+---------------------------------------------------------------------
+Folder: app/templates/
+
+Flask renders templates using Jinja. A template can display values
+provided by a route:
+
+  return render_template(
+      "patient/dashboard.html",
+      user=user,
+      appointments=appointments
+  )
+
+The template receives variables named user and appointments.
+
+Template syntax:
+
+  {{ value }}
+      Prints an escaped value.
+
+  {% if condition %}
+      Starts a conditional block.
+
+  {% for item in items %}
+      Starts a loop.
+
+  {% extends "base.html" %}
+      Reuses the shared page layout.
+
+  {% block content %} ... {% endblock %}
+      Fills a named region of the shared layout.
+
+base.html provides:
+
+  - Common document structure
+  - Top navigation
+  - Role-appropriate navigation links
+  - Logout POST form with CSRF token
+  - Flash-message display
+  - Stylesheet link
+  - Footer
+
+Specific templates such as patient/dashboard.html extend base.html.
+This avoids repeating the navigation and page structure in every
+template.
+
+The sidebar/navigation checks improve usability only. Flask route
+decorators enforce the actual access rules.
+
+
+LESSON 26 - STATIC CSS
+---------------------------------------------------------------------
+File: app/static/css/style.css
+
+The stylesheet controls colors, spacing, forms, tables, alerts, cards,
+and responsive layout. Flask exposes static files using:
+
+  url_for("static", filename="css/style.css")
+
+The HTML template should use url_for rather than hard-coding the full
+filesystem path. A filesystem path is not a public browser URL.
+
+CSS classes like .button, .primary, .table-wrap, and .alert connect
+HTML elements to their presentation rules. CSS does not perform
+authorization or validation.
+
+
+LESSON 27 - TESTS AND THE TEST DATABASE
+---------------------------------------------------------------------
+Folder: tests\
+Run all tests:
+
+  python -m pytest -q
+
+Files:
+
+  tests\conftest.py
+      Creates an app configured for tests and a fresh in-memory
+      SQLite database. It creates tables before a test and drops them
+      afterward.
+
+  tests\test_auth.py
+      Tests patient registration, profile creation, password hashing,
+      login/logout, role assignment, and missing CSRF rejection.
+
+  tests\test_authorization.py
+      Tests anonymous route access, wrong-role route access, and admin
+      access.
+
+  tests\test_appointments.py
+      Tests booking, appointment ownership, doctor assignment checks,
+      and rejection of invalid statuses.
+
+  tests\test_admin.py
+      Tests doctor creation and safe specialty deletion.
+
+  tests\test_pages.py
+      Renders key routes to detect missing templates or URL endpoints.
+
+The test app uses a different database from the real development app.
+That keeps test data away from the clinic.db file.
+
+Pytest symbols:
+
+  @pytest.fixture
+      Reusable setup shared by tests.
+
+  client
+      Flask's test client sends fake HTTP requests without starting
+      the development server.
+
+  app
+      The configured Flask app used by a test.
+
+  assert
+      States what result should occur. Pytest prints details when an
+      assertion fails.
+
+Test frequently after changing code:
+
+  python -m pytest -q
+
+To run one file:
+
+  python -m pytest -q tests\test_auth.py
+
+
+LESSON 28 - MIGRATE, RUN, AND CHECK THE APP
+---------------------------------------------------------------------
+First-time or newly created local database:
+
+  flask --app run.py db upgrade
+
+Start the app:
+
+  python run.py
+
+Open:
+
+  http://127.0.0.1:5000
+
+Check the main flows:
+
+  1. Visit / and confirm the landing page loads.
+  2. Register a patient account.
+  3. Log in as that patient.
+  4. Open the patient dashboard.
+  5. Log out.
+  6. Log in as admin.
+  7. Add a specialty.
+  8. Add a doctor with a long unique password.
+  9. Log out and log in as the doctor.
+ 10. Confirm the doctor dashboard renders.
+ 11. Log in as patient and request an appointment.
+ 12. Log in as doctor and confirm/update the appointment.
+ 13. Log in as patient and check the updated status.
+ 14. Try another patient's appointment ID and verify access is denied.
+
+The app's database begins without accounts. You need to create an
+administrator with seed_admin.py before testing admin management.
+
+
+LESSON 29 - READ A TRACEBACK
+---------------------------------------------------------------------
+An HTTP 500 page is generic. The useful error usually appears in the
+terminal running Flask. Read the traceback from the bottom upward:
+
+  1. Find the final exception type and message.
+  2. Find the last frame in your own app code.
+  3. Identify the database table, template name, or field mentioned.
+  4. Reproduce the same page or form action.
+  5. Fix the source problem, then run the focused test and full suite.
+
+Common examples:
+
+  no such table: doctors
+      The configured database has not had its migrations applied.
+      Check the DATABASE_URL and run:
+      flask --app run.py db upgrade
+
+  TemplateNotFound
+      Confirm the file is under app/templates/ and the route uses the
+      same relative template path.
+
+  BuildError
+      url_for() names a route endpoint that does not exist or was
+      misspelled. Check the Blueprint name and view function name.
+
+  403 Forbidden
+      The current role or object ownership check denied access. This
+      may be correct security behavior, not an internal server error.
+
+  400 Bad Request after a form POST
+      Check that the form includes the CSRF token and that the session
+      cookie is being kept by the browser.
+
+  Could not find platform independent libraries <prefix>
+      This message relates to the Python runtime environment. It is
+      not the same as a Flask exception. Check whether Python continues
+      to start and whether the traceback names your application code.
+
+Do not hide errors with broad try/except blocks. During development,
+read the traceback. Catch only expected errors and show a useful
+message while logging unexpected failures.
+
+
+LESSON 30 - COMMON BEGINNER QUESTIONS
+---------------------------------------------------------------------
+
+Q: Why does the app start but a dashboard gives HTTP 500?
+
+A: Starting Flask does not prove the database has tables. Check the
+terminal traceback. If it says "no such table", run db upgrade using
+the same environment and .env settings as the app.
+
+Q: Why do I need both User and Patient?
+
+A: User holds credentials and account role. Patient holds care-profile
+details. The User ID links those records.
+
+Q: Is hiding the Admin link enough?
+
+A: No. A user can type the URL manually. The role_required decorator
+must protect the server route.
+
+Q: Why does every form need a hidden tag?
+
+A: Flask-WTF includes the CSRF token in hidden_tag(). The token helps
+ensure a state-changing request came from a form generated by this
+application.
+
+Q: Can I store the password in a column named password?
+
+A: No. Store only a generated hash in password_hash. Never log or
+print passwords.
+
+Q: Can I delete clinic.db and start over?
+
+A: Only if it contains no data you need and you understand it will be
+lost. Normally use Alembic migrations. Back up a database before
+experiments.
+
+Q: Why does registration always create a patient?
+
+A: It is public registration. Letting the visitor choose admin or
+doctor would grant self-assigned privileges. Admin creates doctors;
+the first admin is provisioned by seed_admin.py.
+
+
+LESSON 31 - IMPORTANT LIMITATIONS AND NEXT LEARNING STEPS
+---------------------------------------------------------------------
+This project is a teaching foundation, not a production medical
+system. Before real-world use, it would require professional design,
+security, privacy, legal, accessibility, availability, and operational
+review.
+
+Current learning-project limitations include:
+
+  - The date/time workflow uses local, naive datetime values.
+  - Session role changes are not centrally revoked immediately.
+  - There is no password reset, email verification, MFA, or rate limit.
+  - Admin patient and appointment pages are read-only.
+  - There is no full audit log or clinical-record feature.
+  - The built-in Flask server is not suitable for production.
+  - The default development secret must not be used on a public site.
+  - Concurrency and database constraint errors need friendly handling.
+
+Good next exercises:
+
+  1. Add a test for duplicate registration email.
+  2. Add a test that a patient cannot POST a doctor status change.
+  3. Add pagination to admin lists.
+  4. Add a patient profile edit form with CSRF and validation.
+  5. Add doctor availability rules before accepting appointments.
+  6. Add time-zone-aware appointment storage and display.
+  7. Add an audit log for admin and doctor status changes.
+  8. Add user-facing error pages for 403, 404, and 500.
+  9. Improve transactional error handling and uniqueness conflicts.
+ 10. Add accessibility checks to templates.
+
+For each exercise:
+
+  1. Write down expected behavior.
+  2. Add a test that expresses that behavior.
+  3. Run the test and confirm it fails for the expected reason.
+  4. Implement the smallest correct change.
+  5. Run the focused test.
+  6. Run the whole test suite.
+  7. If a model schema changed, create and review a migration.
+
+
+LESSON 32 - THE PROJECT IN ONE MINUTE
+---------------------------------------------------------------------
+Here is the full request cycle:
+
+  Browser request
+       |
+       v
+  Flask finds a Blueprint route
+       |
+       v
+  Authentication/role decorator checks the session
+       |
+       v
+  WTForms validates submitted data and CSRF token
+       |
+       v
+  Route queries or changes SQLAlchemy models
+       |
+       v
+  SQLAlchemy talks to SQLite (or another configured database)
+       |
+       v
+  Flask renders a Jinja template or redirects
+       |
+       v
+  Browser receives HTML and requests CSS
+
+The most important habits are:
+
+  - Read the traceback instead of guessing.
+  - Validate data on the server.
+  - Hash passwords.
+  - Protect every private route on the server.
+  - Check record ownership, not just a user's broad role.
+  - Use CSRF tokens for state-changing forms.
+  - Use migrations to change schemas.
+  - Test normal and unauthorized behavior.
+  - Keep secrets and real patient data out of source control.
+
+END OF LESSON
+=====================================================================

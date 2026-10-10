@@ -1,0 +1,2372 @@
+Absolutely. I’ll use the **Moat Academy teaching guide you supplied as the requirements specification**, and I’ll keep the implementation aligned with its terminology and progression rather than replacing it with a different architecture.
+
+One important distinction: your guide explicitly says to **finish Day 3 Tasks 11–13 first**—ORM query challenge, Appointment model, and another migration—then refactor into Blueprints before starting the authentication/security work.  The uploaded material does **not** give the exact Day 3 database fields for Appointment, so I’ll mark those parts as implementation decisions rather than pretending the guide specified them.
+
+# 1. What we are building
+
+The finished application will be a **professional Flask clinic management system** with:
+
+* Patient registration/login
+* Doctor login
+* Administrator login
+* Secure password hashing
+* Sessions
+* Logout
+* Patient/Doctor/Admin roles
+* Protected routes
+* Server-side role authorization
+* Object-level authorization
+* CSRF protection
+* Patient dashboard
+* Doctor dashboard
+* Admin dashboard
+* Doctor management
+* Appointment management foundation
+* Database migrations
+* Blueprint-based architecture
+* Professional Python package structure
+* Automated tests
+* Git commits
+
+This directly matches the guide's final deliverable, including authentication, hashing, sessions, the three roles, protected routes, authorization, CSRF, dashboards, testing, and Git documentation. 
+
+---
+
+# 2. Professional project structure
+
+Instead of putting everything into one `app.py`, build it like this:
+
+```text
+clinic-management/
+│
+├── app/
+│   ├── __init__.py
+│   ├── extensions.py
+│   │
+│   ├── models/
+│   │   ├── __init__.py
+│   │   ├── user.py
+│   │   ├── patient.py
+│   │   ├── doctor.py
+│   │   ├── specialty.py
+│   │   └── appointment.py
+│   │
+│   ├── auth/
+│   │   ├── __init__.py
+│   │   ├── routes.py
+│   │   └── forms.py
+│   │
+│   ├── patient/
+│   │   ├── __init__.py
+│   │   └── routes.py
+│   │
+│   ├── doctor/
+│   │   ├── __init__.py
+│   │   └── routes.py
+│   │
+│   ├── admin/
+│   │   ├── __init__.py
+│   │   └── routes.py
+│   │
+│   ├── main/
+│   │   ├── __init__.py
+│   │   └── routes.py
+│   │
+│   ├── templates/
+│   │   ├── base.html
+│   │   ├── auth/
+│   │   │   ├── login.html
+│   │   │   └── register.html
+│   │   ├── patient/
+│   │   │   └── dashboard.html
+│   │   ├── doctor/
+│   │   │   └── dashboard.html
+│   │   └── admin/
+│   │       └── dashboard.html
+│   │
+│   └── static/
+│       ├── css/
+│       │   └── style.css
+│       └── js/
+│
+├── migrations/
+│
+├── tests/
+│   ├── __init__.py
+│   ├── test_auth.py
+│   ├── test_authorization.py
+│   └── test_appointments.py
+│
+├── .env
+├── .env.example
+├── .gitignore
+├── config.py
+├── requirements.txt
+├── run.py
+└── README.md
+```
+
+This is the packaging approach I recommend because it gives each responsibility a clear home.
+
+---
+
+# 3. Step 1 — Create the project
+
+Create the directory:
+
+```bash
+mkdir clinic-management
+cd clinic-management
+```
+
+Create a virtual environment:
+
+```bash
+python -m venv venv
+```
+
+Activate it.
+
+### Windows
+
+```bash
+venv\Scripts\activate
+```
+
+### macOS/Linux
+
+```bash
+source venv/bin/activate
+```
+
+---
+
+# 4. Step 2 — Install the packages
+
+Create:
+
+```text
+requirements.txt
+```
+
+Put this inside:
+
+```text
+Flask
+Flask-SQLAlchemy
+Flask-Migrate
+Flask-WTF
+python-dotenv
+email-validator
+Werkzeug
+pytest
+```
+
+Then:
+
+```bash
+pip install -r requirements.txt
+```
+
+The important pieces are:
+
+* `Flask` — web framework
+* `Flask-SQLAlchemy` — ORM
+* `Flask-Migrate` — database migrations
+* `Flask-WTF` — forms + CSRF
+* `Werkzeug` — secure password hashing
+* `python-dotenv` — environment variables
+* `pytest` — testing
+
+---
+
+# 5. Step 3 — Create the configuration
+
+Create:
+
+```text
+config.py
+```
+
+```python
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+class Config:
+    SECRET_KEY = os.getenv(
+        "SECRET_KEY",
+        "dev-only-change-this-secret-key"
+    )
+
+    SQLALCHEMY_DATABASE_URI = os.getenv(
+        "DATABASE_URL",
+        "sqlite:///clinic.db"
+    )
+
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+```
+
+For production, don't use the development fallback secret.
+
+Create `.env`:
+
+```env
+SECRET_KEY=replace-this-with-a-long-random-secret
+DATABASE_URL=sqlite:///clinic.db
+```
+
+And `.env.example`:
+
+```env
+SECRET_KEY=your-secret-key
+DATABASE_URL=sqlite:///clinic.db
+```
+
+---
+
+# 6. Step 4 — Create the Flask extensions
+
+Create:
+
+```text
+app/extensions.py
+```
+
+```python
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
+from flask_wtf import CSRFProtect
+
+db = SQLAlchemy()
+migrate = Migrate()
+csrf = CSRFProtect()
+```
+
+This prevents your application from creating circular imports later.
+
+---
+
+# 7. Step 5 — Create the application factory
+
+Create:
+
+```text
+app/__init__.py
+```
+
+```python
+from flask import Flask
+
+from config import Config
+from app.extensions import db, migrate, csrf
+
+
+def create_app(config_class=Config):
+    app = Flask(__name__)
+
+    app.config.from_object(config_class)
+
+    db.init_app(app)
+    migrate.init_app(app, db)
+    csrf.init_app(app)
+
+    from app.auth import auth_bp
+    from app.patient import patient_bp
+    from app.doctor import doctor_bp
+    from app.admin import admin_bp
+    from app.main import main_bp
+
+    app.register_blueprint(main_bp)
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(patient_bp)
+    app.register_blueprint(doctor_bp)
+    app.register_blueprint(admin_bp)
+
+    return app
+```
+
+This is the central application factory.
+
+---
+
+# 8. Step 6 — Create `run.py`
+
+```python
+from app import create_app
+
+app = create_app()
+
+
+if __name__ == "__main__":
+    app.run(debug=True)
+```
+
+Now you can eventually run:
+
+```bash
+python run.py
+```
+
+---
+
+# 9. Step 7 — Build the User model
+
+The Moat Academy guide explicitly calls for a user structure containing information such as:
+
+```text
+id
+email
+password_hash
+role
+created_at
+```
+
+and suggests separating authentication from Patient/Doctor profiles where appropriate. 
+
+Create:
+
+```text
+app/models/user.py
+```
+
+```python
+from datetime import datetime, timezone
+
+from werkzeug.security import generate_password_hash, check_password_hash
+
+from app.extensions import db
+
+
+class User(db.Model):
+    __tablename__ = "users"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    email = db.Column(
+        db.String(120),
+        unique=True,
+        nullable=False,
+        index=True
+    )
+
+    password_hash = db.Column(
+        db.String(255),
+        nullable=False
+    )
+
+    role = db.Column(
+        db.String(20),
+        nullable=False,
+        default="patient"
+    )
+
+    created_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False
+    )
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(
+            self.password_hash,
+            password
+        )
+
+    def __repr__(self):
+        return f"<User {self.email}>"
+```
+
+Notice that we **never store the original password**.
+
+That is specifically required by the teaching guide. 
+
+---
+
+# 10. Step 8 — Register all models
+
+Create:
+
+```text
+app/models/__init__.py
+```
+
+```python
+from app.models.user import User
+```
+
+Later we'll add:
+
+```python
+from app.models.patient import Patient
+from app.models.doctor import Doctor
+from app.models.specialty import Specialty
+from app.models.appointment import Appointment
+```
+
+This ensures SQLAlchemy knows about the models when migrations are generated.
+
+---
+
+# 11. Step 9 — Create the authentication Blueprint
+
+Create:
+
+```text
+app/auth/__init__.py
+```
+
+```python
+from flask import Blueprint
+
+auth_bp = Blueprint(
+    "auth",
+    __name__,
+    url_prefix="/auth"
+)
+
+from app.auth import routes
+```
+
+Our URLs become:
+
+```text
+/auth/login
+/auth/register
+/auth/logout
+```
+
+---
+
+# 12. Step 10 — Create registration/login forms
+
+Create:
+
+```text
+app/auth/forms.py
+```
+
+```python
+from flask_wtf import FlaskForm
+from wtforms import (
+    StringField,
+    PasswordField,
+    SubmitField
+)
+from wtforms.validators import (
+    DataRequired,
+    Email,
+    Length,
+    EqualTo
+)
+
+
+class RegistrationForm(FlaskForm):
+
+    name = StringField(
+        "Name",
+        validators=[DataRequired(), Length(min=2, max=100)]
+    )
+
+    email = StringField(
+        "Email",
+        validators=[DataRequired(), Email()]
+    )
+
+    phone = StringField(
+        "Phone",
+        validators=[DataRequired(), Length(min=7, max=30)]
+    )
+
+    password = PasswordField(
+        "Password",
+        validators=[DataRequired(), Length(min=8)]
+    )
+
+    password_confirmation = PasswordField(
+        "Confirm Password",
+        validators=[
+            DataRequired(),
+            EqualTo("password")
+        ]
+    )
+
+    submit = SubmitField("Register")
+
+
+class LoginForm(FlaskForm):
+
+    email = StringField(
+        "Email",
+        validators=[DataRequired(), Email()]
+    )
+
+    password = PasswordField(
+        "Password",
+        validators=[DataRequired()]
+    )
+
+    submit = SubmitField("Login")
+```
+
+The guide specifically requires registration to validate required fields, email, password confirmation, duplicate email and appropriate password requirements. 
+
+---
+
+# 13. Step 11 — Implement registration
+
+Create:
+
+```text
+app/auth/routes.py
+```
+
+```python
+from flask import (
+    render_template,
+    redirect,
+    url_for,
+    flash,
+    session
+)
+
+from app.auth import auth_bp
+from app.auth.forms import RegistrationForm, LoginForm
+from app.extensions import db
+from app.models.user import User
+
+
+@auth_bp.route("/register", methods=["GET", "POST"])
+def register():
+
+    if "user_id" in session:
+        return redirect(url_for("main.index"))
+
+    form = RegistrationForm()
+
+    if form.validate_on_submit():
+
+        existing_user = User.query.filter_by(
+            email=form.email.data.lower().strip()
+        ).first()
+
+        if existing_user:
+            flash(
+                "An account with that email already exists.",
+                "danger"
+            )
+            return render_template(
+                "auth/register.html",
+                form=form
+            )
+
+        user = User(
+            email=form.email.data.lower().strip(),
+            role="patient"
+        )
+
+        user.set_password(form.password.data)
+
+        db.session.add(user)
+        db.session.commit()
+
+        flash(
+            "Registration successful. Please log in.",
+            "success"
+        )
+
+        return redirect(url_for("auth.login"))
+
+    return render_template(
+        "auth/register.html",
+        form=form
+    )
+```
+
+The guide says a newly registered user should receive appropriate feedback such as **“Registration successful. Please log in.”** 
+
+---
+
+# 14. Step 12 — Implement login
+
+Add to:
+
+```text
+app/auth/routes.py
+```
+
+```python
+@auth_bp.route("/login", methods=["GET", "POST"])
+def login():
+
+    if "user_id" in session:
+        return redirect(url_for("main.index"))
+
+    form = LoginForm()
+
+    if form.validate_on_submit():
+
+        email = form.email.data.lower().strip()
+
+        user = User.query.filter_by(
+            email=email
+        ).first()
+
+        if user is None or not user.check_password(
+            form.password.data
+        ):
+            flash(
+                "Invalid email or password.",
+                "danger"
+            )
+
+            return render_template(
+                "auth/login.html",
+                form=form
+            )
+
+        session.clear()
+
+        session["user_id"] = user.id
+        session["role"] = user.role
+
+        if user.role == "patient":
+            return redirect(
+                url_for("patient.dashboard")
+            )
+
+        if user.role == "doctor":
+            return redirect(
+                url_for("doctor.dashboard")
+            )
+
+        if user.role == "admin":
+            return redirect(
+                url_for("admin.dashboard")
+            )
+
+        session.clear()
+
+        flash(
+            "Invalid account role.",
+            "danger"
+        )
+
+        return redirect(url_for("auth.login"))
+
+    return render_template(
+        "auth/login.html",
+        form=form
+    )
+```
+
+This follows the guide's required login flow:
+
+```text
+Find user
+   ↓
+Verify password
+   ↓
+Determine role
+   ↓
+Create session
+   ↓
+Redirect to dashboard
+```
+
+The guide explicitly describes this sequence and the three possible dashboard destinations. 
+
+---
+
+# 15. Step 13 — Implement logout
+
+Add:
+
+```python
+@auth_bp.route("/logout", methods=["POST"])
+def logout():
+
+    session.clear()
+
+    flash(
+        "You have been logged out.",
+        "success"
+    )
+
+    return redirect(
+        url_for("auth.login")
+    )
+```
+
+The guide requires authentication information to be removed from the session and protected pages to become inaccessible after logout. 
+
+Notice that I'm using **POST** for logout rather than a simple GET link because logout changes authentication state.
+
+---
+
+# 16. Step 14 — Create authentication decorators
+
+This is one of the most important parts of the project.
+
+Create:
+
+```text
+app/auth/decorators.py
+```
+
+```python
+from functools import wraps
+
+from flask import (
+    session,
+    redirect,
+    url_for,
+    flash
+)
+
+
+def login_required(view):
+
+    @wraps(view)
+    def wrapped_view(*args, **kwargs):
+
+        if "user_id" not in session:
+
+            flash(
+                "Please log in to continue.",
+                "warning"
+            )
+
+            return redirect(
+                url_for("auth.login")
+            )
+
+        return view(*args, **kwargs)
+
+    return wrapped_view
+
+
+def role_required(*allowed_roles):
+
+    def decorator(view):
+
+        @wraps(view)
+        def wrapped_view(*args, **kwargs):
+
+            if "user_id" not in session:
+                flash(
+                    "Please log in to continue.",
+                    "warning"
+                )
+
+                return redirect(
+                    url_for("auth.login")
+                )
+
+            if session.get("role") not in allowed_roles:
+
+                flash(
+                    "You are not authorized to access this page.",
+                    "danger"
+                )
+
+                return redirect(
+                    url_for("main.index")
+                )
+
+            return view(*args, **kwargs)
+
+        return wrapped_view
+
+    return decorator
+```
+
+Now we have two concepts:
+
+```python
+@login_required
+```
+
+means:
+
+> Are you authenticated?
+
+And:
+
+```python
+@role_required("admin")
+```
+
+means:
+
+> Are you authenticated **and** authorized to perform this operation?
+
+That distinction is central to the Academy material: authentication asks **“Who are you?”**, while authorization asks **“Are you allowed to do this?”** 
+
+---
+
+# 17. Step 15 — Patient Blueprint
+
+Create:
+
+```text
+app/patient/__init__.py
+```
+
+```python
+from flask import Blueprint
+
+patient_bp = Blueprint(
+    "patient",
+    __name__,
+    url_prefix="/patient"
+)
+
+from app.patient import routes
+```
+
+Then:
+
+```text
+app/patient/routes.py
+```
+
+```python
+from flask import render_template, session
+
+from app.patient import patient_bp
+from app.auth.decorators import role_required
+from app.models.user import User
+
+
+@patient_bp.route("/dashboard")
+@role_required("patient")
+def dashboard():
+
+    user = User.query.get_or_404(
+        session["user_id"]
+    )
+
+    return render_template(
+        "patient/dashboard.html",
+        user=user
+    )
+```
+
+The guide requires the patient dashboard to provide things such as:
+
+```text
+Welcome, [Patient Name]
+My Appointments
+My Profile
+Logout
+```
+
+
+
+---
+
+# 18. Step 16 — Doctor Blueprint
+
+Create:
+
+```text
+app/doctor/__init__.py
+```
+
+```python
+from flask import Blueprint
+
+doctor_bp = Blueprint(
+    "doctor",
+    __name__,
+    url_prefix="/doctor"
+)
+
+from app.doctor import routes
+```
+
+Then:
+
+```text
+app/doctor/routes.py
+```
+
+```python
+from flask import render_template, session
+
+from app.doctor import doctor_bp
+from app.auth.decorators import role_required
+from app.models.user import User
+
+
+@doctor_bp.route("/dashboard")
+@role_required("doctor")
+def dashboard():
+
+    user = User.query.get_or_404(
+        session["user_id"]
+    )
+
+    return render_template(
+        "doctor/dashboard.html",
+        user=user
+    )
+```
+
+The guide says doctors should have access to their dashboard, assigned appointments, appointment status management and appropriate patient information, but not administrator functionality. 
+
+---
+
+# 19. Step 17 — Administrator Blueprint
+
+Create:
+
+```text
+app/admin/__init__.py
+```
+
+```python
+from flask import Blueprint
+
+admin_bp = Blueprint(
+    "admin",
+    __name__,
+    url_prefix="/admin"
+)
+
+from app.admin import routes
+```
+
+Then:
+
+```text
+app/admin/routes.py
+```
+
+```python
+from flask import render_template
+
+from app.admin import admin_bp
+from app.auth.decorators import role_required
+
+
+@admin_bp.route("/dashboard")
+@role_required("admin")
+def dashboard():
+
+    return render_template(
+        "admin/dashboard.html"
+    )
+```
+
+The guide gives administrators responsibility for doctors, specialties, patients and appointments. 
+
+---
+
+# 20. Step 18 — Create the main Blueprint
+
+Create:
+
+```text
+app/main/__init__.py
+```
+
+```python
+from flask import Blueprint
+
+main_bp = Blueprint(
+    "main",
+    __name__
+)
+
+from app.main import routes
+```
+
+Then:
+
+```text
+app/main/routes.py
+```
+
+```python
+from flask import render_template
+
+from app.main import main_bp
+
+
+@main_bp.route("/")
+def index():
+
+    return render_template("base.html")
+```
+
+---
+
+# 21. Step 19 — Create the database migration
+
+Once the User model exists:
+
+```bash
+flask --app run.py db init
+```
+
+Then:
+
+```bash
+flask --app run.py db migrate -m "Create user authentication model"
+```
+
+Then:
+
+```bash
+flask --app run.py db upgrade
+```
+
+Your project should now have:
+
+```text
+migrations/
+```
+
+This is the professional way to evolve the database rather than repeatedly deleting the database.
+
+---
+
+# 22. Step 20 — Create Patient and Doctor profiles
+
+The guide explicitly allows authentication to be separated from ordinary profile information and gives:
+
+```text
+User
+ ├── Patient
+ └── Doctor
+```
+
+as an example. 
+
+A professional implementation would therefore use:
+
+```text
+User
+  |
+  +---- Patient
+  |
+  +---- Doctor
+```
+
+### `patient.py`
+
+```python
+from app.extensions import db
+
+
+class Patient(db.Model):
+    __tablename__ = "patients"
+
+    id = db.Column(
+        db.Integer,
+        primary_key=True
+    )
+
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id"),
+        nullable=False,
+        unique=True
+    )
+
+    name = db.Column(
+        db.String(100),
+        nullable=False
+    )
+
+    phone = db.Column(
+        db.String(30),
+        nullable=False
+    )
+
+    user = db.relationship(
+        "User",
+        backref=db.backref(
+            "patient_profile",
+            uselist=False
+        )
+    )
+```
+
+### `doctor.py`
+
+```python
+from app.extensions import db
+
+
+class Doctor(db.Model):
+    __tablename__ = "doctors"
+
+    id = db.Column(
+        db.Integer,
+        primary_key=True
+    )
+
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id"),
+        nullable=False,
+        unique=True
+    )
+
+    name = db.Column(
+        db.String(100),
+        nullable=False
+    )
+
+    phone = db.Column(
+        db.String(30),
+        nullable=True
+    )
+
+    user = db.relationship(
+        "User",
+        backref=db.backref(
+            "doctor_profile",
+            uselist=False
+        )
+    )
+```
+
+**Important:** the exact fields for these profiles are an implementation choice because the uploaded guide does not prescribe their complete schemas.
+
+---
+
+# 23. Step 21 — Create the Appointment model
+
+Your source specifically says Day 3 includes:
+
+```text
+Task 12 - Create the Appointment Model
+Task 13 - Modify a Model and Migrate Again
+```
+
+but the supplied material doesn't specify the complete Appointment schema. 
+
+For the Day 4 security requirements, however, we need appointments to belong to patients and be associated with doctors.
+
+A sensible implementation is:
+
+```text
+Appointment
+    |
+    +-- patient_id
+    +-- doctor_id
+    +-- appointment_date
+    +-- status
+```
+
+Create:
+
+```text
+app/models/appointment.py
+```
+
+```python
+from datetime import datetime
+
+from app.extensions import db
+
+
+class Appointment(db.Model):
+    __tablename__ = "appointments"
+
+    id = db.Column(
+        db.Integer,
+        primary_key=True
+    )
+
+    patient_id = db.Column(
+        db.Integer,
+        db.ForeignKey("patients.id"),
+        nullable=False
+    )
+
+    doctor_id = db.Column(
+        db.Integer,
+        db.ForeignKey("doctors.id"),
+        nullable=False
+    )
+
+    appointment_date = db.Column(
+        db.DateTime,
+        nullable=False
+    )
+
+    status = db.Column(
+        db.String(30),
+        nullable=False,
+        default="scheduled"
+    )
+
+    patient = db.relationship(
+        "Patient",
+        backref="appointments"
+    )
+
+    doctor = db.relationship(
+        "Doctor",
+        backref="appointments"
+    )
+```
+
+Again, this schema is **my implementation of the guide's requirements**, not a claim that these exact fields appeared in your supplied teaching material.
+
+---
+
+# 24. Step 22 — Migrate the new models
+
+Update:
+
+```text
+app/models/__init__.py
+```
+
+to:
+
+```python
+from app.models.user import User
+from app.models.patient import Patient
+from app.models.doctor import Doctor
+from app.models.appointment import Appointment
+```
+
+Then:
+
+```bash
+flask --app run.py db migrate -m "Add patient doctor and appointment models"
+```
+
+Then:
+
+```bash
+flask --app run.py db upgrade
+```
+
+This completes the migration cycle associated with the Day 3 → Day 4 transition.
+
+---
+
+# 25. Step 23 — The critical security requirement
+
+This is where many student projects fail.
+
+**Do not rely on hiding buttons.**
+
+For example, this is **not security**:
+
+```jinja2
+{% if session.role == "admin" %}
+    <a href="/admin">Admin</a>
+{% endif %}
+```
+
+Someone can simply type:
+
+```text
+/admin/dashboard
+```
+
+The Academy guide explicitly calls this out: hiding a link does not prevent someone from manually entering the URL; authorization must happen on the server. 
+
+That's why our route contains:
+
+```python
+@role_required("admin")
+```
+
+The server checks the permission.
+
+---
+
+# 26. Step 24 — Protect individual appointments
+
+This is even more important.
+
+Suppose:
+
+```text
+Patient A → Appointment 15
+Patient B → Appointment 16
+```
+
+Patient A must **not** be able to change:
+
+```text
+/appointments/15
+```
+
+to:
+
+```text
+/appointments/16
+```
+
+and see Patient B's information.
+
+The guide explicitly requires checking both authentication **and ownership/authorization**. 
+
+Example:
+
+```python
+from flask import abort, session
+
+from app.models.appointment import Appointment
+
+
+def get_patient_appointment(appointment_id):
+
+    appointment = Appointment.query.get_or_404(
+        appointment_id
+    )
+
+    current_user_id = session["user_id"]
+
+    if appointment.patient.user_id != current_user_id:
+        abort(403)
+
+    return appointment
+```
+
+Then:
+
+```python
+@patient_bp.route("/appointments/<int:appointment_id>")
+@role_required("patient")
+def appointment_detail(appointment_id):
+
+    appointment = get_patient_appointment(
+        appointment_id
+    )
+
+    return render_template(
+        "patient/appointment.html",
+        appointment=appointment
+    )
+```
+
+This is **object-level authorization**.
+
+---
+
+# 27. Step 25 — CSRF protection
+
+Because we initialized:
+
+```python
+csrf.init_app(app)
+```
+
+Flask-WTF protects our forms.
+
+For example:
+
+```html
+<form method="POST">
+
+    {{ form.hidden_tag() }}
+
+    {{ form.email.label }}
+    {{ form.email() }}
+
+    {{ form.password.label }}
+    {{ form.password() }}
+
+    {{ form.submit() }}
+
+</form>
+```
+
+The important line is:
+
+```jinja2
+{{ form.hidden_tag() }}
+```
+
+That includes the CSRF token.
+
+The Academy guide requires reviewing state-changing forms—including registration, login, logout where applicable, profile changes, doctor management and other POST requests—and expects invalid/missing CSRF tokens to be rejected. 
+
+---
+
+# 28. Step 26 — Professional base template
+
+Create:
+
+```text
+app/templates/base.html
+```
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        {% block title %}
+            Clinic Management System
+        {% endblock %}
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/style.css') }}"
+    >
+</head>
+
+<body>
+
+<header class="navbar">
+
+    <div class="brand">
+        Clinic Management System
+    </div>
+
+    <nav>
+
+        {% if session.get("user_id") %}
+
+            {% if session.get("role") == "patient" %}
+                <a href="{{ url_for('patient.dashboard') }}">
+                    Dashboard
+                </a>
+            {% endif %}
+
+            {% if session.get("role") == "doctor" %}
+                <a href="{{ url_for('doctor.dashboard') }}">
+                    Dashboard
+                </a>
+            {% endif %}
+
+            {% if session.get("role") == "admin" %}
+                <a href="{{ url_for('admin.dashboard') }}">
+                    Dashboard
+                </a>
+            {% endif %}
+
+            <form
+                method="POST"
+                action="{{ url_for('auth.logout') }}"
+                style="display:inline;"
+            >
+                <input
+                    type="hidden"
+                    name="csrf_token"
+                    value="{{ csrf_token() }}"
+                >
+
+                <button type="submit">
+                    Logout
+                </button>
+            </form>
+
+        {% else %}
+
+            <a href="{{ url_for('auth.login') }}">
+                Login
+            </a>
+
+            <a href="{{ url_for('auth.register') }}">
+                Register
+            </a>
+
+        {% endif %}
+
+    </nav>
+
+</header>
+
+<main class="container">
+
+    {% with messages = get_flashed_messages(
+        with_categories=true
+    ) %}
+
+        {% for category, message in messages %}
+
+            <div class="alert {{ category }}">
+                {{ message }}
+            </div>
+
+        {% endfor %}
+
+    {% endwith %}
+
+    {% block content %}
+    {% endblock %}
+
+</main>
+
+</body>
+</html>
+```
+
+---
+
+# 29. Step 27 — Registration page
+
+Create:
+
+```text
+app/templates/auth/register.html
+```
+
+```html
+{% extends "base.html" %}
+
+{% block title %}
+Register
+{% endblock %}
+
+{% block content %}
+
+<h1>Create Patient Account</h1>
+
+<form method="POST">
+
+    {{ form.hidden_tag() }}
+
+    <div>
+        {{ form.name.label }}
+        {{ form.name() }}
+
+        {% for error in form.name.errors %}
+            <small>{{ error }}</small>
+        {% endfor %}
+    </div>
+
+    <div>
+        {{ form.email.label }}
+        {{ form.email() }}
+
+        {% for error in form.email.errors %}
+            <small>{{ error }}</small>
+        {% endfor %}
+    </div>
+
+    <div>
+        {{ form.phone.label }}
+        {{ form.phone() }}
+    </div>
+
+    <div>
+        {{ form.password.label }}
+        {{ form.password() }}
+    </div>
+
+    <div>
+        {{ form.password_confirmation.label }}
+        {{ form.password_confirmation() }}
+    </div>
+
+    {{ form.submit() }}
+
+</form>
+
+{% endblock %}
+```
+
+---
+
+# 30. Step 28 — Login page
+
+```text
+app/templates/auth/login.html
+```
+
+```html
+{% extends "base.html" %}
+
+{% block title %}
+Login
+{% endblock %}
+
+{% block content %}
+
+<h1>Login</h1>
+
+<form method="POST">
+
+    {{ form.hidden_tag() }}
+
+    <div>
+        {{ form.email.label }}
+        {{ form.email() }}
+    </div>
+
+    <div>
+        {{ form.password.label }}
+        {{ form.password() }}
+    </div>
+
+    {{ form.submit() }}
+
+</form>
+
+{% endblock %}
+```
+
+---
+
+# 31. Step 29 — Patient dashboard
+
+```text
+app/templates/patient/dashboard.html
+```
+
+```html
+{% extends "base.html" %}
+
+{% block title %}
+Patient Dashboard
+{% endblock %}
+
+{% block content %}
+
+<h1>Patient Dashboard</h1>
+
+<p>
+    Welcome, {{ user.patient_profile.name if user.patient_profile else user.email }}
+</p>
+
+<div class="dashboard-grid">
+
+    <a href="#">
+        My Appointments
+    </a>
+
+    <a href="#">
+        My Profile
+    </a>
+
+</div>
+
+{% endblock %}
+```
+
+---
+
+# 32. Step 30 — Doctor dashboard
+
+```html
+{% extends "base.html" %}
+
+{% block title %}
+Doctor Dashboard
+{% endblock %}
+
+{% block content %}
+
+<h1>Doctor Dashboard</h1>
+
+<p>
+    Welcome, Dr.
+    {{ user.doctor_profile.name if user.doctor_profile else user.email }}
+</p>
+
+<div class="dashboard-grid">
+
+    <a href="#">
+        My Appointments
+    </a>
+
+    <a href="#">
+        My Profile
+    </a>
+
+</div>
+
+{% endblock %}
+```
+
+---
+
+# 33. Step 31 — Administrator dashboard
+
+```html
+{% extends "base.html" %}
+
+{% block title %}
+Administrator Dashboard
+{% endblock %}
+
+{% block content %}
+
+<h1>Administrator Dashboard</h1>
+
+<p>Welcome, Administrator.</p>
+
+<div class="dashboard-grid">
+
+    <a href="#">
+        Manage Doctors
+    </a>
+
+    <a href="#">
+        Manage Specialties
+    </a>
+
+    <a href="#">
+        Manage Patients
+    </a>
+
+    <a href="#">
+        Manage Appointments
+    </a>
+
+</div>
+
+{% endblock %}
+```
+
+These dashboard contents correspond to the Academy's specified dashboard structure. 
+
+---
+
+# 34. Step 32 — Add professional styling
+
+Create:
+
+```text
+app/static/css/style.css
+```
+
+```css
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f4f6f8;
+    color: #222;
+}
+
+.navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 40px;
+    background: #1f2937;
+    color: white;
+}
+
+.brand {
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+
+.navbar a {
+    color: white;
+    text-decoration: none;
+    margin-left: 20px;
+}
+
+.container {
+    width: min(1100px, 92%);
+    margin: 40px auto;
+}
+
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(
+        auto-fit,
+        minmax(220px, 1fr)
+    );
+
+    gap: 20px;
+}
+
+.dashboard-grid a {
+    padding: 30px;
+    background: white;
+    border-radius: 10px;
+    text-decoration: none;
+    color: #222;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.alert {
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    border-radius: 6px;
+}
+
+.alert.success {
+    background: #d1fae5;
+}
+
+.alert.danger {
+    background: #fee2e2;
+}
+
+.alert.warning {
+    background: #fef3c7;
+}
+```
+
+---
+
+# 35. Step 33 — Create an admin doctor-management route
+
+Now we start fulfilling:
+
+```text
+Administrator
+    ↓
+Manage Doctors
+    ↓
+Create/Edit/Delete Doctor
+```
+
+The Academy's final demonstration specifically requires the administrator to demonstrate doctor management. 
+
+For example:
+
+```python
+@admin_bp.route("/doctors")
+@role_required("admin")
+def doctors():
+
+    doctors = Doctor.query.all()
+
+    return render_template(
+        "admin/doctors.html",
+        doctors=doctors
+    )
+```
+
+The critical part is:
+
+```python
+@role_required("admin")
+```
+
+A patient cannot bypass this by manually entering:
+
+```text
+/admin/doctors
+```
+
+---
+
+# 36. Step 34 — Seed an administrator
+
+You should **not allow public registration to select `admin`**.
+
+The registration code deliberately says:
+
+```python
+role="patient"
+```
+
+That is important.
+
+Otherwise someone could register:
+
+```text
+email = attacker@example.com
+role = admin
+```
+
+and immediately become an administrator.
+
+Create an administrative seed script instead:
+
+```text
+seed_admin.py
+```
+
+```python
+from app import create_app
+from app.extensions import db
+from app.models.user import User
+
+app = create_app()
+
+with app.app_context():
+
+    existing = User.query.filter_by(
+        email="admin@clinic.local"
+    ).first()
+
+    if existing:
+        print("Admin already exists.")
+    else:
+
+        admin = User(
+            email="admin@clinic.local",
+            role="admin"
+        )
+
+        admin.set_password("ChangeThisImmediately123!")
+
+        db.session.add(admin)
+        db.session.commit()
+
+        print("Administrator created.")
+```
+
+Run:
+
+```bash
+python seed_admin.py
+```
+
+Then immediately use a strong password in a real environment.
+
+---
+
+# 37. Step 35 — Run the application
+
+```bash
+python run.py
+```
+
+Open:
+
+```text
+http://127.0.0.1:5000
+```
+
+Your workflow should now be:
+
+```text
+Register
+   ↓
+Patient account created
+   ↓
+Login
+   ↓
+Patient Dashboard
+   ↓
+Logout
+```
+
+---
+
+# 38. Step 36 — Test the security exactly as Moat Academy asks
+
+Don't just test the buttons.
+
+### Test 1 — Anonymous user
+
+Without logging in, manually enter:
+
+```text
+/patient/dashboard
+```
+
+Expected:
+
+```text
+Redirect to login
+```
+
+Do the same for:
+
+```text
+/doctor/dashboard
+/admin/dashboard
+```
+
+The Academy specifically says to manually type protected URLs rather than testing only by clicking navigation links. 
+
+---
+
+# 39. Test 2 — Patient attacking admin
+
+Login as:
+
+```text
+patient@example.com
+```
+
+Then manually enter:
+
+```text
+/admin/dashboard
+```
+
+Expected:
+
+```text
+403 / Access denied / redirected
+```
+
+Then try:
+
+```text
+/admin/doctors
+```
+
+Again:
+
+```text
+DENIED
+```
+
+This is exactly the URL-manipulation test in the guide. 
+
+---
+
+# 40. Test 3 — Doctor attacking admin
+
+Login as:
+
+```text
+doctor@example.com
+```
+
+Then:
+
+```text
+/admin/dashboard
+```
+
+Expected:
+
+```text
+ACCESS DENIED
+```
+
+The guide explicitly requires doctors not to access administrator functionality. 
+
+---
+
+# 41. Test 4 — Appointment ID manipulation
+
+Login as Patient A.
+
+Visit:
+
+```text
+/appointments/15
+```
+
+Then change the URL to:
+
+```text
+/appointments/16
+```
+
+If appointment 16 belongs to Patient B:
+
+```text
+403 Forbidden
+```
+
+It must **not** display Patient B's appointment.
+
+This is one of the most important security tests in the entire project. 
+
+---
+
+# 42. Test 5 — Logout
+
+Run:
+
+```text
+Login
+ ↓
+Dashboard
+ ↓
+Logout
+ ↓
+Dashboard URL
+```
+
+Expected:
+
+```text
+Redirect to login
+```
+
+The session must no longer identify the user as authenticated. 
+
+---
+
+# 43. Test 6 — Password security
+
+Register:
+
+```text
+test@example.com
+```
+
+with:
+
+```text
+MyPassword123!
+```
+
+Then inspect the database.
+
+You should see something resembling:
+
+```text
+$pbkdf2-sha256$...
+```
+
+or another generated password hash.
+
+You should **not** see:
+
+```text
+MyPassword123!
+```
+
+The Academy specifically asks students to inspect the database and verify that the original password isn't stored as plaintext. 
+
+---
+
+# 44. Test 7 — CSRF
+
+Remove:
+
+```jinja2
+{{ form.hidden_tag() }}
+```
+
+from a POST form temporarily.
+
+Submit the form.
+
+It should fail because the CSRF token is missing.
+
+Then restore:
+
+```jinja2
+{{ form.hidden_tag() }}
+```
+
+The Academy specifically asks students to invalidate/remove the token and observe the application rejecting the request. 
+
+---
+
+# 45. Your final security matrix
+
+Use this as your project checklist:
+
+| User                        | Patient |              Doctor |                Admin |
+| --------------------------- | ------: | ------------------: | -------------------: |
+| Anonymous                   |       ❌ |                   ❌ |                    ❌ |
+| Patient dashboard           |       ✅ |                   ❌ |    Depends on design |
+| Doctor dashboard            |       ❌ |                   ✅ |                    ❌ |
+| Admin dashboard             |       ❌ |                   ❌ |                    ✅ |
+| Manage doctors              |       ❌ |                   ❌ |                    ✅ |
+| Manage specialties          |       ❌ |                   ❌ |                    ✅ |
+| Own appointments            |       ✅ |                   — |                    — |
+| Assigned appointments       |       — |                   ✅ |                    — |
+| Other patient's appointment |       ❌ | ❌ unless authorized | Admin as appropriate |
+| Logout                      |       ✅ |                   ✅ |                    ✅ |
+
+The guide's test matrix emphasizes that unauthorized access must be prevented, while legitimate cross-access can be defined by the application's design. 
+
+---
+
+# 46. Git workflow — make the project look professional
+
+Don't make one giant commit called:
+
+```text
+finished project
+```
+
+Instead:
+
+```bash
+git init
+```
+
+Then:
+
+```bash
+git add .
+git commit -m "Initialize Flask clinic application"
+```
+
+After the database:
+
+```bash
+git add .
+git commit -m "Add SQLAlchemy models and migrations"
+```
+
+After authentication:
+
+```bash
+git add .
+git commit -m "Implement user authentication"
+```
+
+After authorization:
+
+```bash
+git add .
+git commit -m "Implement role based authorization"
+```
+
+After dashboards:
+
+```bash
+git add .
+git commit -m "Add patient doctor and admin dashboards"
+```
+
+After testing:
+
+```bash
+git add .
+git commit -m "Add authentication and authorization tests"
+```
+
+This directly supports the Academy's requirement for Git commits documenting the work. 
+
+---
+
+# 47. Final professional package
+
+When finished, your repository should look approximately like this:
+
+```text
+clinic-management/
+│
+├── app/
+│   ├── __init__.py
+│   ├── extensions.py
+│   │
+│   ├── models/
+│   │   ├── __init__.py
+│   │   ├── user.py
+│   │   ├── patient.py
+│   │   ├── doctor.py
+│   │   ├── specialty.py
+│   │   └── appointment.py
+│   │
+│   ├── auth/
+│   │   ├── __init__.py
+│   │   ├── decorators.py
+│   │   ├── forms.py
+│   │   └── routes.py
+│   │
+│   ├── patient/
+│   │   ├── __init__.py
+│   │   └── routes.py
+│   │
+│   ├── doctor/
+│   │   ├── __init__.py
+│   │   └── routes.py
+│   │
+│   ├── admin/
+│   │   ├── __init__.py
+│   │   └── routes.py
+│   │
+│   ├── main/
+│   │   ├── __init__.py
+│   │   └── routes.py
+│   │
+│   ├── templates/
+│   │   ├── base.html
+│   │   ├── auth/
+│   │   ├── patient/
+│   │   ├── doctor/
+│   │   └── admin/
+│   │
+│   └── static/
+│       ├── css/
+│       └── js/
+│
+├── migrations/
+├── tests/
+│   ├── test_auth.py
+│   ├── test_authorization.py
+│   └── test_appointments.py
+│
+├── .env
+├── .env.example
+├── .gitignore
+├── config.py
+├── requirements.txt
+├── run.py
+├── seed_admin.py
+└── README.md
+```
+
+## The development order I recommend
+
+Don't try to write the entire application at once. Build it in this order:
+
+```text
+DAY 3
+ │
+ ├── Finish ORM query challenge
+ ├── Appointment model
+ └── Migration
+       ↓
+BLUEPRINT REFACTOR
+       ↓
+DAY 4
+       ↓
+1. User model
+       ↓
+2. Password hashing
+       ↓
+3. Registration
+       ↓
+4. Login
+       ↓
+5. Sessions
+       ↓
+6. Logout
+       ↓
+7. Protected routes
+       ↓
+8. Roles
+       ↓
+9. Role authorization
+       ↓
+10. Object-level authorization
+       ↓
+11. CSRF review
+       ↓
+12. Patient dashboard
+       ↓
+13. Doctor dashboard
+       ↓
+14. Admin dashboard
+       ↓
+15. Doctor management
+       ↓
+16. Security testing
+       ↓
+17. Git commits
+       ↓
+FINAL DEMONSTRATION
+```
+
+That progression follows the Academy guide's intended learning sequence: first make the application user-aware, then establish authentication, sessions and roles, then enforce authorization, protect resources and CSRF, build the three dashboards, and finally demonstrate unauthorized-access handling. 
+
+**One caveat:** because the uploaded guide contains the Day 4 specification but only names Day 3 Tasks 11–13, I have not invented what your instructor's exact Day 3 `Appointment`, `Doctor`, `Specialty`, or existing ORM schemas are supposed to contain. The Appointment fields I showed are a sensible implementation needed to satisfy the Day 4 security requirements, not source-derived requirements.
+
+If you want, the next useful step is to take this architecture and produce the **complete copy-paste-ready project file-by-file** (every `.py`, HTML template, CSS file, migration setup, tests, `README.md`, `.gitignore`, and commands), so you can build it directly without filling in missing code yourself.

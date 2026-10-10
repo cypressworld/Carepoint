@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Appointment details · CarePoint{% endblock %}
+{% block content %}
+<section class="form-card">
+    <p class="eyebrow">Appointment #{{ appointment.id }}</p>
+    <h1>Visit details</h1>
+    <dl class="details">
+        <dt>Doctor</dt><dd>{{ appointment.doctor.name }}</dd>
+        <dt>Specialty</dt><dd>{{ appointment.doctor.specialty.name if appointment.doctor.specialty else "General" }}</dd>
+        <dt>Date and time</dt><dd>{{ appointment.appointment_date.strftime("%b %d, %Y · %I:%M %p") }}</dd>
+        <dt>Status</dt><dd><span class="badge">{{ appointment.status|title }}</span></dd>
+    </dl>
+    <a class="button primary" href="{{ url_for('communication.conversation', appointment_id=appointment.id) }}">Message your doctor</a>
+    <a class="button secondary" href="{{ url_for('patient.dashboard') }}">Back to dashboard</a>
+</section>
+{% endblock %}

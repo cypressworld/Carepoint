@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Appointment communication · CarePoint{% endblock %}
+{% block content %}
+<section class="page-heading">
+    <p class="eyebrow">Appointment #{{ appointment.id }}</p>
+    <h1>Patient and doctor communication</h1>
+    <p class="muted">{{ appointment.patient.name }} · {{ appointment.doctor.name }} · {{ appointment.appointment_date.strftime("%b %d, %Y · %I:%M %p") }}</p>
+    <p class="muted">Messages are visible to the assigned patient, doctor, and authorized clinic administrators for care coordination and safety review. Do not use this chat for emergencies.</p>
+</section>
+
+{% if latest_intake %}
+<section class="form-card compact-card">
+    <h2>Most recent patient intake</h2>
+    <p><strong>Symptoms/concerns:</strong> {{ latest_intake.symptoms }}</p>
+    <p><strong>Duration:</strong> {{ latest_intake.symptom_duration }}</p>
+    {% if latest_intake.previous_illness %}<p><strong>Most recent significant illness:</strong> {{ latest_intake.previous_illness }}</p>{% endif %}
+    <p class="muted">Patient-submitted information; confirm details directly with the patient.</p>
+</section>
+{% endif %}
+
+<section class="form-card compact-card">
+    <h2>Conversation</h2>
+    {% if messages %}
+        {% for message in messages %}
+            <article class="message-entry">
+                <p><strong>{{ message.sender.email }}</strong> · {{ message.created_at.strftime("%b %d, %Y · %I:%M %p") }}</p>
+                <p>{{ message.body }}</p>
+            </article>
+        {% endfor %}
+    {% else %}
+        <p class="muted">No messages yet.</p>
+    {% endif %}
+
+    {% if not is_admin %}
+    <form method="post" novalidate>
+        {{ form.hidden_tag() }}
+        <label>{{ form.body.label }}{{ form.body(rows=4) }}</label>
+        {% for error in form.body.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+        {{ form.submit(class_="button primary") }}
+    </form>
+    {% endif %}
+    {% if session.get("role") == "patient" %}
+        <a class="button secondary" href="{{ url_for('patient.dashboard') }}">Back to dashboard</a>
+    {% elif session.get("role") == "doctor" %}
+        <a class="button secondary" href="{{ url_for('doctor.dashboard') }}">Back to dashboard</a>
+    {% else %}
+        <a class="button secondary" href="{{ url_for('communication.admin_messages') }}">Back to communications review</a>
+    {% endif %}
+</section>
+{% endblock %}

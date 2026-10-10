@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Communications · CarePoint{% endblock %}
+{% block content %}
+<section class="page-heading">
+    <p class="eyebrow">Administration</p>
+    <h1>Communication review</h1>
+    <p class="muted">Authorized administrators can review appointment chats. Keyword flags are prompts for human review, not findings of misconduct.</p>
+</section>
+{% if messages %}
+<div class="table-wrap"><table>
+    <thead><tr><th>Sent</th><th>Sender</th><th>Appointment</th><th>Message</th><th>Flag</th><th>Review</th><th></th></tr></thead>
+    <tbody>{% for message in messages %}
+    <tr>
+        <td>{{ message.created_at.strftime("%b %d, %Y · %I:%M %p") }}</td>
+        <td>{{ message.sender.email }} ({{ message.sender.role }})</td>
+        <td>#{{ message.appointment_id }} · {{ message.appointment.patient.name }} / {{ message.appointment.doctor.name }}</td>
+        <td>{{ message.body }}</td>
+        <td>{% if message.flagged_terms %}<span class="badge">Flagged: {{ message.flagged_terms }}</span>{% else %}—{% endif %}</td>
+        <td>{{ "Reviewed" if message.reviewed_at else "Needs review" if message.flagged_terms else "—" }}</td>
+        <td class="actions">
+            <a href="{{ url_for('communication.conversation', appointment_id=message.appointment_id) }}">Open chat</a>
+            {% if message.flagged_terms and not message.reviewed_at %}
+            <form class="inline-form" method="post" action="{{ url_for('communication.review_message', message_id=message.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="link-button" type="submit">Mark reviewed</button>
+            </form>
+            {% endif %}
+        </td>
+    </tr>
+    {% endfor %}</tbody>
+</table></div>
+{% else %}
+<div class="empty-state"><h3>No messages</h3><p>Appointment conversations will appear here.</p></div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}My profile · CarePoint{% endblock %}
+{% block content %}
+<section class="form-card">
+    <p class="eyebrow">Patient portal</p>
+    <h1>My profile</h1>
+    <dl class="details">
+        <dt>Name</dt><dd>{{ user.patient_profile.name }}</dd>
+        <dt>Email</dt><dd>{{ user.email }}</dd>
+        <dt>Phone</dt><dd>{{ user.patient_profile.phone }}</dd>
+    </dl>
+    <p class="muted">Contact the clinic if your profile details need to be changed.</p>
+</section>
+{% endblock %}

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Care suggestion · CarePoint{% endblock %}
+{% block content %}
+<section class="form-card">
+    <p class="eyebrow">Care intake saved</p>
+    <h1>Suggested next step</h1>
+    <p>Your information is saved for your care team. This suggestion is based only on the care area you selected; it is not a diagnosis or an automatic assignment.</p>
+    {% if suggestion %}
+        <p>Suggested doctor: <strong>{{ suggestion.name }}</strong>{% if suggestion.specialty %} ({{ suggestion.specialty.name }}){% endif %}</p>
+        <p>You can confirm your choice when booking an appointment.</p>
+    {% elif intake.specialty_id is none %}
+        <p>No care area was selected. Contact the clinic team to help identify an appropriate doctor.</p>
+    {% else %}
+        <p>No available doctor matched your selected care area. Contact the clinic or choose another specialty when booking.</p>
+    {% endif %}
+    <a class="button primary" href="{{ url_for('patient.book_appointment') }}">Book an appointment</a>
+    <a class="button secondary" href="{{ url_for('patient.dashboard') }}">Back to dashboard</a>
+</section>
+{% endblock %}

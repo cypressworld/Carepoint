@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}CarePoint Clinic · Connected care{% endblock %}
+{% block content %}
+<section class="page-heading">
+    <p class="eyebrow">CarePoint Clinic</p>
+    <h1>Thoughtful care, made easier.</h1>
+    <p class="muted">Connect with your care team, request appointments, and keep your clinic journey organized.</p>
+    {% if not session.get("user_id") %}
+        <p><a class="button primary" href="{{ url_for('auth.register') }}">Get started</a>
+        <a class="button secondary" href="{{ url_for('auth.login') }}">Log in</a></p>
+    {% elif session.get("role") == "patient" %}
+        <p><a class="button primary" href="{{ url_for('patient.dashboard') }}">Open patient portal</a></p>
+    {% elif session.get("role") == "doctor" %}
+        <p><a class="button primary" href="{{ url_for('doctor.dashboard') }}">Open doctor workspace</a></p>
+    {% elif session.get("role") == "admin" %}
+        <p><a class="button primary" href="{{ url_for('admin.dashboard') }}">Open clinic administration</a></p>
+    {% endif %}
+</section>
+<div class="stats-grid">
+    <div class="stat-card"><span>Patient-first</span><strong>01</strong><span>Care starts with you.</span></div>
+    <div class="stat-card"><span>Connected</span><strong>02</strong><span>Your care team in one place.</span></div>
+    <div class="stat-card"><span>Secure</span><strong>03</strong><span>Private access to your care.</span></div>
+</div>
+{% endblock %}

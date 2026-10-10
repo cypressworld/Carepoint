@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Admin dashboard · CarePoint{% endblock %}
+{% block content %}
+<section class="page-heading">
+    <p class="eyebrow">Clinic administration</p>
+    <h1>Operations overview</h1>
+    <p class="muted">Manage clinic records and monitor appointment activity.</p>
+</section>
+<div class="stats-grid">
+    <a class="stat-card" href="{{ url_for('admin.doctors') }}"><span>Doctors</span><strong>{{ doctor_count }}</strong></a>
+    <a class="stat-card" href="{{ url_for('admin.patients') }}"><span>Patients</span><strong>{{ patient_count }}</strong></a>
+    <a class="stat-card" href="{{ url_for('admin.specialties') }}"><span>Specialties</span><strong>{{ specialty_count }}</strong></a>
+    <a class="stat-card" href="{{ url_for('admin.appointments') }}"><span>Appointments</span><strong>{{ appointment_count }}</strong></a>
+    <a class="stat-card" href="{{ url_for('communication.admin_messages') }}"><span>Messages awaiting review</span><strong>{{ flagged_message_count }}</strong></a>
+</div>
+<section class="quick-links">
+    <h2>Clinic management</h2>
+    <a class="button primary" href="{{ url_for('admin.create_doctor') }}">Add a doctor</a>
+    <a class="button secondary" href="{{ url_for('admin.specialties') }}">Manage specialties</a>
+    <a class="button secondary" href="{{ url_for('admin.appointments') }}">View appointments</a>
+    <a class="button secondary" href="{{ url_for('communication.admin_messages') }}">Review communications</a>
+</section>
+{% endblock %}

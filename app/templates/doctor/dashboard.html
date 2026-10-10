@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Doctor dashboard · CarePoint{% endblock %}
+{% block content %}
+<section class="page-heading">
+    <p class="eyebrow">Doctor workspace</p>
+    <h1>Welcome, Dr. {{ user.doctor_profile.name }}</h1>
+    <p class="muted">{{ user.doctor_profile.specialty.name if user.doctor_profile.specialty else "General practice" }}</p>
+</section>
+<h2>Assigned appointments</h2>
+{% if appointments %}
+    <div class="table-wrap"><table>
+        <thead><tr><th>Date</th><th>Patient</th><th>Phone</th><th>Status</th><th>Update status</th><th>Communication</th></tr></thead>
+        <tbody>{% for appointment in appointments %}
+            <tr>
+                <td>{{ appointment.appointment_date.strftime("%b %d, %Y · %I:%M %p") }}</td>
+                <td>{{ appointment.patient.name }}</td>
+                <td>{{ appointment.patient.phone }}</td>
+                <td><span class="badge">{{ appointment.status|title }}</span></td>
+                <td><form class="inline-form status-form" method="post" action="{{ url_for('doctor.update_appointment_status', appointment_id=appointment.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <select name="status" aria-label="New appointment status">
+                        {% for status in ["scheduled", "confirmed", "completed", "cancelled"] %}
+                            <option value="{{ status }}" {% if status == appointment.status %}selected{% endif %}>{{ status|title }}</option>
+                        {% endfor %}
+                    </select>
+                    <button class="button small" type="submit">Save</button>
+                </form></td>
+                <td><a href="{{ url_for('communication.conversation', appointment_id=appointment.id) }}">Open chat</a></td>
+            </tr>
+        {% endfor %}</tbody>
+    </table></div>
+{% else %}
+    <div class="empty-state"><h3>No appointments assigned</h3><p>New patient requests will appear here.</p></div>
+{% endif %}
+{% endblock %}

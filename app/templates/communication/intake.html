@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Care intake · CarePoint{% endblock %}
+{% block content %}
+<section class="form-card">
+    <p class="eyebrow">Patient portal</p>
+    <h1>Care intake</h1>
+    <p class="muted">Share a few details to help the clinic prepare. This is not a diagnosis or emergency service.</p>
+    <form method="post" novalidate>
+        {{ form.hidden_tag() }}
+        <label>{{ form.symptoms.label }}{{ form.symptoms(rows=4) }}</label>
+        {% for error in form.symptoms.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+        <label>{{ form.symptom_duration.label }}{{ form.symptom_duration(rows=2) }}</label>
+        {% for error in form.symptom_duration.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+        <label>{{ form.previous_illness.label }}{{ form.previous_illness(rows=3) }}</label>
+        {% for error in form.previous_illness.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+        <label>{{ form.specialty_id.label }}{{ form.specialty_id() }}</label>
+        {% for error in form.specialty_id.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+        {{ form.submit(class_="button primary") }}
+    </form>
+    <p class="muted">If you may be experiencing a medical emergency, contact your local emergency services.</p>
+</section>
+{% endblock %}

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Book appointment · CarePoint{% endblock %}
+{% block content %}
+<section class="form-card">
+    <p class="eyebrow">Patient portal</p>
+    <h1>Request an appointment</h1>
+    <p class="muted">Choose a doctor and a future date. The clinic will confirm your request.</p>
+    <form method="post" novalidate>
+        {{ form.hidden_tag() }}
+        <label>{{ form.doctor_id.label }}{{ form.doctor_id() }}</label>
+        {% for error in form.doctor_id.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+        <label>{{ form.appointment_date.label }}{{ form.appointment_date() }}</label>
+        {% for error in form.appointment_date.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+        {{ form.submit(class_="button primary") }}
+        <a class="button secondary" href="{{ url_for('patient.dashboard') }}">Cancel</a>
+    </form>
+</section>
+{% endblock %}

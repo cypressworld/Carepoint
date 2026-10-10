@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Appointments · CarePoint{% endblock %}
+{% block content %}
+<section class="page-heading"><p class="eyebrow">Administration</p><h1>Appointments</h1><p class="muted">View booking requests across the clinic.</p></section>
+{% if appointments %}<div class="table-wrap"><table><thead><tr><th>Date</th><th>Patient</th><th>Doctor</th><th>Status</th></tr></thead>
+<tbody>{% for appointment in appointments %}<tr><td>{{ appointment.appointment_date.strftime("%b %d, %Y · %I:%M %p") }}</td><td>{{ appointment.patient.name }}</td><td>{{ appointment.doctor.name }}</td><td><span class="badge">{{ appointment.status|title }}</span></td></tr>{% endfor %}</tbody></table></div>
+{% else %}<div class="empty-state"><h3>No appointments</h3><p>Patient booking requests will appear here.</p></div>{% endif %}
+{% endblock %}

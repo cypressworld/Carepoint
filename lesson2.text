@@ -1,0 +1,720 @@
+CAREPOINT CLINIC MANAGEMENT
+LESSON 2: BUILD A FLASK PROJECT STEP BY STEP
+============================================================
+
+WHO THIS LESSON IS FOR
+------------------------------------------------------------
+This lesson is for a beginner who wants to understand how a small
+Flask application is assembled, not just how to copy files. Work in
+order. After each stage, run the check before adding more code.
+
+You will build another clinic-style application manually using the
+same ideas as CarePoint:
+
+  * Flask application factory
+  * MySQL through XAMPP and SQLAlchemy
+  * database models and migrations
+  * registration, login, roles, and protected routes
+  * patient and doctor appointment workflows
+  * admin pages, patient intake, and messaging
+  * tests, debugging, and documentation
+
+IMPORTANT SAFETY NOTE
+------------------------------------------------------------
+This is a learning project, not a certified medical system. Do not put
+real patient data in a tutorial app. A specialty lookup is not a
+diagnosis. Keyword detection is not a dependable safety system.
+Real-world clinical software needs professional security, privacy,
+legal, and clinical review.
+
+
+LESSON 1: PLAN BEFORE CODING
+------------------------------------------------------------
+Write down the people, actions, and records your application needs.
+
+People (roles):
+  1. Patient: registers, reviews visits, requests appointments,
+     enters care-intake information, and messages their assigned doctor.
+  2. Doctor: reviews assigned appointments and talks to those patients.
+  3. Admin: manages clinic staff and reviews clinic-wide activity.
+
+Core records:
+  * User: email, password hash, role
+  * Patient: name, phone, linked user
+  * Doctor: name, linked user, specialty, suspended/active status
+  * Specialty: name and description
+  * Appointment: patient, doctor, date/time, status
+  * Intake: symptoms, duration, prior illness, optional specialty
+  * Message: appointment, sender, text, optional review flag
+
+Think about permissions before designing pages:
+  * A patient can see only their own appointment details.
+  * A doctor can see only appointments assigned to that doctor.
+  * Only an admin can open admin pages or review clinic-wide messages.
+  * A browser session is not the source of truth for the account role;
+    the server must check the current user record.
+
+Exercise:
+  Draw boxes for the records and arrows for their relationships. For
+  example, one patient can have many appointments; an appointment has
+  one patient and one doctor.
+
+
+LESSON 2: CREATE A PROJECT AND A VIRTUAL ENVIRONMENT
+------------------------------------------------------------
+Create a new folder and open PowerShell inside it:
+
+  mkdir my-clinic
+  cd my-clinic
+  py -m venv venv
+  .\venv\Scripts\Activate.ps1
+
+A virtual environment keeps this project's Python packages separate
+from other projects. If activation is blocked, use its Python directly:
+
+  .\venv\Scripts\python.exe -m pip install Flask
+
+Create requirements.txt. Start with the tools the project uses:
+
+  Flask
+  Flask-SQLAlchemy
+  Flask-Migrate
+  Flask-WTF
+  python-dotenv
+  PyMySQL
+  email-validator
+  pytest
+
+Install them:
+
+  python -m pip install -r requirements.txt
+
+Check:
+
+  python -m flask --version
+
+Do not install packages into a different Python environment by
+accident. When unsure, call pip through the active venv's Python.
+
+
+LESSON 3: MAKE THE PACKAGE STRUCTURE
+------------------------------------------------------------
+Create this starting structure. Python files inside packages need an
+__init__.py file:
+
+  my-clinic/
+    app/
+      __init__.py
+      extensions.py
+      models/
+        __init__.py
+      main/
+        __init__.py
+        routes.py
+      templates/
+      static/
+    tests/
+    config.py
+    run.py
+    requirements.txt
+    .env.example
+    .gitignore
+
+Add a .gitignore so local secrets and generated files are not committed:
+
+  .env
+  venv/
+  __pycache__/
+  *.py[cod]
+  .pytest_cache/
+
+Copy .env.example to .env for local settings. Never add real passwords,
+API keys, or patient data to Git.
+
+
+LESSON 4: CONFIGURE THE APPLICATION
+------------------------------------------------------------
+In config.py, read settings from environment variables rather than
+hard-coding secrets:
+
+  import os
+  from dotenv import load_dotenv
+
+  load_dotenv()
+
+  class Config:
+      SECRET_KEY = os.getenv("SECRET_KEY", "dev-only-change-me")
+      SQLALCHEMY_DATABASE_URI = os.getenv(
+          "DATABASE_URL",
+          "mysql+pymysql://root:@localhost:3306/my_clinic"
+          "?charset=utf8mb4",
+      )
+      SQLALCHEMY_TRACK_MODIFICATIONS = False
+      SESSION_COOKIE_HTTPONLY = True
+      SESSION_COOKIE_SAMESITE = "Lax"
+
+Create .env.example (a template, not a secret):
+
+  SECRET_KEY=replace-me-for-local-development
+  DATABASE_URL=mysql+pymysql://root:@localhost:3306/my_clinic?charset=utf8mb4
+
+For XAMPP, start MySQL in the XAMPP Control Panel and create a database
+in phpMyAdmin. The example assumes host localhost, port 3306, username
+root, and a blank password. Change the URL to match your own setup.
+Special URL characters in a database password must be URL-encoded.
+
+Do not check your actual .env file into Git. A development fallback
+secret is not appropriate for a public or production deployment.
+
+
+LESSON 5: INITIALIZE FLASK EXTENSIONS
+------------------------------------------------------------
+In app/extensions.py, create shared extension objects. They are
+initialized later when the Flask app is created:
+
+  from flask_sqlalchemy import SQLAlchemy
+  from flask_migrate import Migrate
+  from flask_wtf import CSRFProtect
+
+  db = SQLAlchemy()
+  migrate = Migrate()
+  csrf = CSRFProtect()
+
+Why not create a database connection in every route? A shared extension
+lets Flask manage one configured database integration for the app.
+
+In app/__init__.py, use the application factory pattern:
+
+  from importlib import import_module
+  from flask import Flask
+  from config import Config
+  from app.extensions import db, migrate, csrf
+
+  def create_app(config_class=Config):
+      app = Flask(__name__)
+      app.config.from_object(config_class)
+      db.init_app(app)
+      migrate.init_app(app, db)
+      csrf.init_app(app)
+      import_module("app.models")
+      return app
+
+An app factory lets tests create a separate app with a temporary test
+database instead of touching the real development database. Importing
+the model package registers the models in SQLAlchemy metadata so
+Flask-Migrate can detect them.
+
+In run.py:
+
+  from app import create_app
+
+  app = create_app()
+
+  if __name__ == "__main__":
+      app.run()
+
+Add a simple landing route and template before continuing. Run:
+
+  python run.py
+
+Open http://127.0.0.1:5000/. Stop the development server with Ctrl+C.
+
+
+LESSON 6: CONNECT TO XAMPP MYSQL
+------------------------------------------------------------
+In XAMPP, start MySQL. In phpMyAdmin create a database, for example:
+
+  my_clinic
+
+Put its connection URL in your local .env:
+
+  DATABASE_URL=mysql+pymysql://root:@localhost:3306/my_clinic?charset=utf8mb4
+
+Check the URL parts:
+  mysql+pymysql  SQLAlchemy MySQL dialect and PyMySQL driver
+  root           database username
+  @localhost     database host
+  :3306          database port
+  /my_clinic     database name
+
+If using a nonblank password, put it after root: and before @. Encode
+reserved characters. Do not paste credentials into screenshots or chat.
+
+The database must exist before the app can create tables in it.
+
+
+LESSON 7: MODEL THE DATA
+------------------------------------------------------------
+A model is a Python class that SQLAlchemy maps to a database table.
+Start with a User model in app/models/user.py:
+
+  from werkzeug.security import generate_password_hash, check_password_hash
+  from app.extensions import db
+
+  class User(db.Model):
+      __tablename__ = "users"
+
+      id = db.Column(db.Integer, primary_key=True)
+      email = db.Column(db.String(120), unique=True, nullable=False)
+      password_hash = db.Column(db.String(255), nullable=False)
+      role = db.Column(db.String(20), nullable=False, default="patient")
+
+      def set_password(self, password):
+          self.password_hash = generate_password_hash(password)
+
+      def check_password(self, password):
+          return check_password_hash(self.password_hash, password)
+
+Never store a plaintext password. A password hash is one-way; at login
+the submitted password is checked against the saved hash.
+
+Create separate Patient and Doctor models. Link each to User with a
+foreign key such as:
+
+  user_id = db.Column(
+      db.Integer,
+      db.ForeignKey("users.id"),
+      unique=True,
+      nullable=False,
+  )
+
+Create Specialty before Doctor if Doctor has a specialty_id foreign
+key. Create Appointment with patient_id and doctor_id foreign keys.
+Create the model classes in separate files so each table is easy to
+understand. Import all models in app/models/__init__.py so migrations
+can discover the full schema.
+
+Exercise:
+  Add a new optional field such as a doctor phone number. Later, create
+  a migration for it. Do not edit a live database table manually.
+
+
+LESSON 8: TRACK SCHEMA CHANGES WITH MIGRATIONS
+------------------------------------------------------------
+After models are in place, initialize the migration folder once:
+
+  flask --app run.py db init
+
+Create an initial migration and apply it:
+
+  flask --app run.py db migrate -m "Create clinic tables"
+  flask --app run.py db upgrade
+
+The migration is a versioned description of changes to the database.
+Keep migrations in source control. Before applying an automatically
+generated migration, read it and confirm it matches the models.
+
+For future model changes:
+
+  flask --app run.py db migrate -m "Add intake history"
+  flask --app run.py db upgrade
+
+Never delete the database to make a migration error disappear. Back up
+important data and understand the error first.
+
+
+LESSON 9: USE FORMS AND VALIDATE INPUT
+------------------------------------------------------------
+Create FlaskForm classes in feature folders. WTForms validators run on
+the server. Browser-side required fields are useful but can be bypassed.
+
+Example:
+
+  from flask_wtf import FlaskForm
+  from wtforms import StringField, PasswordField, SubmitField
+  from wtforms.validators import DataRequired, Email, Length
+
+  class LoginForm(FlaskForm):
+      email = StringField(
+          "Email",
+          validators=[DataRequired(), Email(), Length(max=120)],
+      )
+      password = PasswordField(
+          "Password",
+          validators=[DataRequired()],
+      )
+      submit = SubmitField("Log in")
+
+In the HTML form, include the CSRF token:
+
+  <form method="post">
+      {{ form.hidden_tag() }}
+      {{ form.email.label }} {{ form.email() }}
+      {{ form.password.label }} {{ form.password() }}
+      {{ form.submit() }}
+  </form>
+
+Flask-WTF checks the CSRF token on state-changing requests. Use POST
+for operations that create, update, or delete data. Do not use a GET
+link to delete a record.
+
+
+LESSON 10: BUILD REGISTRATION AND LOGIN
+------------------------------------------------------------
+Create app/auth/forms.py and app/auth/routes.py.
+
+Registration should:
+  1. Validate the form.
+  2. Normalize email with strip() and lower().
+  3. Check whether the email is already taken.
+  4. Create a User with role "patient" only.
+  5. Hash the password with set_password().
+  6. Create its Patient profile.
+  7. Add both records and commit once.
+  8. Show a success or failure message.
+
+Do not include a role field in public registration. Otherwise a visitor
+could submit role=admin.
+
+Login should:
+  1. Look up the normalized email.
+  2. Check the password hash.
+  3. Reject invalid credentials without creating a session.
+  4. Reject a suspended doctor.
+  5. Clear old session values, then save user_id and role.
+  6. Redirect according to the database role.
+
+Logout should clear the session and use a CSRF-protected POST form.
+
+Create the login and registration templates. Test correct passwords,
+wrong passwords, duplicate emails, invalid email, and role tampering.
+
+
+LESSON 11: SPLIT ROUTES INTO BLUEPRINTS
+------------------------------------------------------------
+As an app grows, group routes by feature. A Blueprint is a set of
+related routes that is registered with the main Flask app.
+
+Example patient blueprint in app/patient/__init__.py:
+
+  from flask import Blueprint
+
+  patient_bp = Blueprint("patient", __name__, url_prefix="/patient")
+
+In app/__init__.py import and register it:
+
+  app.register_blueprint(patient_bp)
+
+Build separate auth, patient, doctor, admin, and communication
+Blueprints. Their route files should call database models and render
+templates; templates should not contain database logic.
+
+Use url_for("patient.dashboard") instead of hard-coding a URL string.
+Flask builds the correct URL from the Blueprint and route function.
+
+
+LESSON 12: PROTECT ROUTES WITH SERVER-SIDE AUTHORIZATION
+------------------------------------------------------------
+Authentication asks, "Who is signed in?" Authorization asks, "May this
+person do this action?"
+
+Write a role_required decorator that:
+  1. Reads user_id from the session.
+  2. Loads that user from the database.
+  3. Clears invalid sessions.
+  4. Checks the database role on every request.
+  5. Redirects or returns 403 if the role is not allowed.
+
+Apply it to all role-specific routes:
+
+  @patient_bp.route("/dashboard")
+  @role_required("patient")
+  def dashboard():
+      ...
+
+Do not trust session["role"] by itself. The role can change after a
+session was created; re-check the user record.
+
+Role checks alone are not enough for a specific record. Also check
+ownership:
+  * Before showing appointment #12 to a patient, ensure appointment
+    #12 belongs to that signed-in patient's profile.
+  * Before changing appointment status, ensure it belongs to that
+    signed-in doctor.
+  * A doctor must not read another doctor's patient conversation.
+
+Test unauthorized requests by calling the URL directly; do not rely on
+the fact that the page link is hidden.
+
+
+LESSON 13: BUILD THE PATIENT APPOINTMENT WORKFLOW
+------------------------------------------------------------
+Create an appointment form containing:
+  * doctor selection populated from active doctors in the database
+  * date and time
+  * CSRF token
+
+When the form is submitted:
+  1. Validate every field on the server.
+  2. Reject a date/time that is not later than now.
+  3. Load the doctor again and confirm they are still active.
+  4. Check that the doctor has no non-cancelled booking at that exact
+     date/time.
+  5. Check that this patient has no non-cancelled booking at that
+     exact date/time.
+  6. Create and commit the appointment.
+  7. Show success or an understandable validation error.
+
+The browser's available doctor list can become stale after the page
+loads. Always validate the selected doctor again during the POST.
+Database row locks can help with concurrent requests, but production
+systems may also require database-level constraints or a dedicated
+booking strategy.
+
+Add doctor appointment status actions. Accept only a fixed set of
+statuses such as scheduled, confirmed, completed, or cancelled.
+
+
+LESSON 14: BUILD ADMIN FEATURES
+------------------------------------------------------------
+Admin pages should be protected by role_required("admin") on the
+server. Add create, edit, and list pages for specialties and doctors.
+
+For doctor suspension, prefer a boolean field such as is_suspended:
+  * Suspended doctor cannot log in.
+  * Suspended doctor is not offered for new bookings.
+  * Existing doctor and appointment records remain available to admin.
+
+Use POST forms with CSRF tokens for suspension, deletion, and other
+changes. Add explicit validation for every form field. Check duplicate
+email and duplicate specialty names before committing.
+
+Do not expose an admin-signup selector on public registration. Create
+the initial administrator through a controlled, out-of-band bootstrap
+script or deployment process.
+
+
+LESSON 15: ADD PATIENT CARE INTAKE
+------------------------------------------------------------
+Create an Intake model linked to Patient. Store only the fields needed
+for the learning feature, for example:
+  * symptoms/concerns
+  * symptom duration
+  * previous significant illness
+  * optional chosen specialty
+  * optional suggested doctor
+  * timestamp
+
+Use a validated form with maximum lengths. The patient should be able
+to choose "Not sure". If a specialty is selected, find an active doctor
+in that specialty and present the result as a suggestion.
+
+Do not describe a directory lookup as a diagnosis or medical triage.
+Do not automatically assign the doctor unless the product requirements
+and clinical governance explicitly call for that.
+
+Test that:
+  * only a patient can submit intake;
+  * required fields and maximum lengths are checked;
+  * prior illness is saved;
+  * suspended doctors are not suggested;
+  * no specialty selection does not falsely suggest a doctor.
+
+
+LESSON 16: ADD APPOINTMENT MESSAGING
+------------------------------------------------------------
+Create a Message model linked to an Appointment and a sender User.
+Store message body and creation time. Keep validation limits on message
+length.
+
+Before showing or adding a message:
+  * allow the assigned patient;
+  * allow the assigned, active doctor;
+  * allow an authorized admin to review;
+  * deny all other users.
+
+For keyword review, use clear, documented patterns and store which
+terms matched. Show flags privately to authorized admins. A keyword
+match is only a reason to review; ordinary messages can match and
+unsafe messages may not match. Never automatically punish a patient or
+doctor solely because of a word match. Do not claim chat is monitored
+live or suitable for emergencies.
+
+
+LESSON 17: GIVE DATABASE ACTIONS FEEDBACK
+------------------------------------------------------------
+Put commit and rollback behavior in one small helper instead of
+repeating inconsistent code:
+
+  try:
+      db.session.commit()
+  except SQLAlchemyError:
+      db.session.rollback()
+      current_app.logger.exception("Database transaction failed.")
+      flash("The change could not be saved.", "danger")
+  else:
+      flash("The change was saved.", "success")
+
+Do not hide the exception silently, tell users a save succeeded when
+it failed, or keep a broken transaction open. Log the traceback for
+the operator; display a safe, generic message to the user.
+
+
+LESSON 18: ADD TEMPLATES AND A SHARED LAYOUT
+------------------------------------------------------------
+Create app/templates/base.html with shared page structure:
+  * page title block
+  * stylesheet link
+  * navigation links based on role
+  * flashed messages
+  * page content block
+
+Other templates extend the layout:
+
+  {% extends "base.html" %}
+  {% block content %}
+      <h1>My dashboard</h1>
+  {% endblock %}
+
+Navigation hiding is just a user-interface convenience. It never
+replaces the server-side role checks.
+
+Keep templates responsible for presentation. Put validation, queries,
+permissions, and commits in Python route/service code.
+
+
+LESSON 19: TEST THE APP
+------------------------------------------------------------
+Create tests/conftest.py with a test configuration and an isolated
+database. The current project uses SQLite in-memory for tests so test
+records do not touch XAMPP.
+
+Write tests for observable behavior:
+  * patient registration creates a patient profile and password hash;
+  * login succeeds with the correct password and rejects the wrong one;
+  * an anonymous user cannot open dashboards;
+  * a patient cannot open admin routes or another patient's appointment;
+  * a doctor cannot update another doctor's appointment;
+  * appointment times in the past or at an occupied exact time fail;
+  * suspension blocks login and new bookings;
+  * intake history is stored and doctor suggestion follows the selected
+    specialty;
+  * chat access is restricted to appointment participants;
+  * keyword messages are flagged for admin review, not auto-punished;
+  * failed commits roll back and show a failure notice.
+
+Run the tests:
+
+  python -m pytest -q
+
+When a test fails, read its traceback. Fix the code that caused the
+failure rather than suppressing the test.
+
+
+LESSON 20: DEBUG AN INTERNAL SERVER ERROR
+------------------------------------------------------------
+The browser's "Internal Server Error" page is generic. The useful
+traceback is in the terminal where Flask is running.
+
+Steps:
+  1. Reproduce the error in the browser.
+  2. Copy the exception type and the last relevant traceback frames.
+  3. Check the database migration state and confirm the latest
+     migration was applied to the same database the app uses.
+  4. Check the active virtual environment has the required packages.
+  5. Add a focused test or reproduce the request using Flask's test
+     client.
+  6. Fix and run the focused test, then run the whole suite.
+
+Do not publish database passwords, SECRET_KEY values, session cookies,
+or real patient information when sharing an error report.
+
+
+LESSON 21: USE GIT AND WRITE A PROJECT README
+------------------------------------------------------------
+Initialize Git after adding .gitignore:
+
+  git init
+  git add .
+  git status
+
+Check that .env, venv/, and patient data are not staged. Then make a
+small commit:
+
+  git commit -m "Create Flask clinic project structure"
+
+Commit by logical steps, for example:
+  1. application setup and database models;
+  2. authentication and tests;
+  3. appointments and authorization;
+  4. admin workflows;
+  5. intake and communication.
+
+A helpful GitHub README tells another developer:
+  * what the project does;
+  * key features and important limitations;
+  * prerequisites and setup commands;
+  * environment variables and database setup;
+  * how to apply migrations;
+  * how to create the first admin;
+  * how to run and test the project;
+  * where to find the important code.
+
+Never put .env secrets into a README, source code, commit, or screenshot.
+
+
+LESSON 22: UNDERSTAND THE REQUEST FLOW
+------------------------------------------------------------
+When a patient books:
+
+  Browser form
+      -> Flask patient route
+      -> server-side form validation
+      -> role and ownership checks
+      -> SQLAlchemy query for active doctor and time conflict
+      -> SQLAlchemy adds appointment
+      -> commit helper commits or rolls back
+      -> flash message and redirect
+      -> Jinja template displays the response
+
+When an admin opens a page:
+
+  Browser request
+      -> Flask route decorator checks current database user and role
+      -> route loads the records permitted to that admin
+      -> template displays them
+
+Learning to trace this path makes it easier to debug errors and decide
+which file should contain new code.
+
+
+LESSON 23: PRACTICE CHALLENGES
+------------------------------------------------------------
+After you can run the base app, try these one at a time:
+
+  Beginner:
+    * Add a patient's emergency contact field and a migration.
+    * Add a "cancel appointment" action for the appointment owner.
+    * Add a doctor specialty filter to the admin list.
+
+  Intermediate:
+    * Add pagination to the admin appointment list.
+    * Add tests for duplicate email and invalid specialty IDs.
+    * Add a maximum time in the future for booking, with a clear rule.
+
+  Advanced:
+    * Define appointment duration and prevent overlapping time ranges.
+    * Add audit records for admin account changes.
+    * Add database-backed rate limiting and account recovery.
+
+Before implementing a challenge, decide the rule, add a failing test,
+implement it, then run all tests. Ask for clarification when a behavior
+could reasonably work in more than one way.
+
+
+FINAL CHECKLIST
+------------------------------------------------------------
+[ ] I know which Python environment the app uses.
+[ ] My .env contains local settings and is not committed.
+[ ] My XAMPP MySQL service is running and the database exists.
+[ ] Flask migrations are current.
+[ ] Passwords are hashed.
+[ ] Public registration cannot create an admin or doctor.
+[ ] Every protected route checks the database role.
+[ ] Every private record checks ownership or assignment.
+[ ] Forms validate input on the server and include CSRF protection.
+[ ] Failed database commits roll back and report failure.
+[ ] Tests use a separate database and pass.
+[ ] README explains setup and learning-project limitations.
+
+END OF LESSON

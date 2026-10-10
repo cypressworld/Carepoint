@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Patient dashboard · CarePoint{% endblock %}
+{% block content %}
+<section class="page-heading">
+    <p class="eyebrow">Patient portal</p>
+    <h1>Good day, {{ user.patient_profile.name if user.patient_profile else user.email }}</h1>
+    <p class="muted">Manage your visits and keep your care information close.</p>
+</section>
+<div class="section-heading">
+    <h2>Your appointments</h2>
+    <div>
+        <a class="button secondary" href="{{ url_for('communication.intake') }}">Care intake</a>
+        <a class="button primary" href="{{ url_for('patient.book_appointment') }}">Book an appointment</a>
+    </div>
+</div>
+{% if appointments %}
+    <div class="table-wrap"><table>
+        <thead><tr><th>Date</th><th>Doctor</th><th>Specialty</th><th>Status</th><th></th></tr></thead>
+        <tbody>{% for appointment in appointments %}
+            <tr>
+                <td>{{ appointment.appointment_date.strftime("%b %d, %Y · %I:%M %p") }}</td>
+                <td>{{ appointment.doctor.name }}</td>
+                <td>{{ appointment.doctor.specialty.name if appointment.doctor.specialty else "General" }}</td>
+                <td><span class="badge">{{ appointment.status|title }}</span></td>
+                <td><a href="{{ url_for('patient.appointment_detail', appointment_id=appointment.id) }}">Details</a></td>
+            </tr>
+        {% endfor %}</tbody>
+    </table></div>
+{% else %}
+    <div class="empty-state"><h3>No appointments yet</h3><p>Choose a doctor to request your first visit.</p></div>
+{% endif %}
+{% endblock %}

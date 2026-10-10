@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Doctors · CarePoint{% endblock %}
+{% block content %}
+<div class="section-heading"><div><p class="eyebrow">Administration</p><h1>Doctors</h1></div><a class="button primary" href="{{ url_for('admin.create_doctor') }}">Add doctor</a></div>
+{% if doctors %}
+<div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Specialty</th><th>Status</th><th>Actions</th></tr></thead>
+<tbody>{% for doctor in doctors %}<tr>
+    <td>{{ doctor.name }}</td><td>{{ doctor.user.email }}</td><td>{{ doctor.phone or "—" }}</td>
+    <td>{{ doctor.specialty.name if doctor.specialty else "General" }}</td>
+    <td><span class="badge">{{ "Suspended" if doctor.is_suspended else "Active" }}</span></td>
+    <td class="actions"><a href="{{ url_for('admin.edit_doctor', doctor_id=doctor.id) }}">Edit</a>
+        <form class="inline-form" method="post" action="{{ url_for('admin.set_doctor_suspension', doctor_id=doctor.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="{{ 'restore' if doctor.is_suspended else 'suspend' }}">
+            <button class="link-button" type="submit">{{ "Restore" if doctor.is_suspended else "Suspend" }}</button>
+        </form>
+        <form class="inline-form" method="post" action="{{ url_for('admin.delete_doctor', doctor_id=doctor.id) }}" onsubmit="return confirm('Remove this doctor account?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="link-button danger-text" type="submit">Remove</button>
+        </form>
+    </td>
+</tr>{% endfor %}</tbody></table></div>
+{% else %}<div class="empty-state"><h3>No doctors added</h3><p>Create a doctor account to make appointments available.</p></div>{% endif %}
+{% endblock %}

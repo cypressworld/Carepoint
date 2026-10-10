@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Edit specialty · CarePoint{% endblock %}
+{% block content %}
+<section class="form-card"><p class="eyebrow">Administration</p><h1>Edit specialty</h1>
+<form method="post" novalidate>{{ form.hidden_tag() }}
+    <label>{{ form.name.label }}{{ form.name() }}</label>{% for error in form.name.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+    <label>{{ form.description.label }}{{ form.description(rows=3) }}</label>{% for error in form.description.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+    {{ form.submit(class_="button primary") }} <a class="button secondary" href="{{ url_for('admin.specialties') }}">Cancel</a>
+</form></section>
+{% endblock %}

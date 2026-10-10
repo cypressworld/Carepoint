@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Specialties · CarePoint{% endblock %}
+{% block content %}
+<section class="page-heading"><p class="eyebrow">Administration</p><h1>Specialties</h1><p class="muted">Organize doctors by their clinical area.</p></section>
+<section class="form-card compact-card">
+    <h2>Add a specialty</h2><form method="post" novalidate>{{ form.hidden_tag() }}
+        <label>{{ form.name.label }}{{ form.name() }}</label>{% for error in form.name.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+        <label>{{ form.description.label }}{{ form.description(rows=3) }}</label>{% for error in form.description.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+        {{ form.submit(class_="button primary") }}
+    </form>
+</section>
+{% if specialties %}<div class="table-wrap"><table><thead><tr><th>Specialty</th><th>Description</th><th>Doctors</th><th>Actions</th></tr></thead>
+<tbody>{% for specialty in specialties %}<tr><td>{{ specialty.name }}</td><td>{{ specialty.description or "—" }}</td><td>{{ specialty.doctors|length }}</td>
+<td class="actions"><a href="{{ url_for('admin.edit_specialty', specialty_id=specialty.id) }}">Edit</a>
+<form class="inline-form" method="post" action="{{ url_for('admin.delete_specialty', specialty_id=specialty.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="link-button danger-text" type="submit">Remove</button></form></td></tr>{% endfor %}</tbody></table></div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Create account · CarePoint{% endblock %}
+{% block content %}
+<section class="auth-card">
+    <p class="eyebrow">Patient registration</p>
+    <h1>Create your account</h1>
+    <form method="post" novalidate>
+        {{ form.hidden_tag() }}
+        <label>{{ form.name.label }}{{ form.name(autocomplete="name") }}</label>
+        {% for error in form.name.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+        <label>{{ form.email.label }}{{ form.email(autocomplete="email") }}</label>
+        {% for error in form.email.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+        <label>{{ form.phone.label }}{{ form.phone(autocomplete="tel") }}</label>
+        {% for error in form.phone.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+        <label>{{ form.password.label }}{{ form.password(autocomplete="new-password") }}</label>
+        {% for error in form.password.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+        <label>{{ form.password_confirmation.label }}{{ form.password_confirmation(autocomplete="new-password") }}</label>
+        {% for error in form.password_confirmation.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+        {{ form.submit(class_="button primary full-width") }}
+    </form>
+    <p class="muted">Doctor and administrator accounts are created by an administrator.</p>
+</section>
+{% endblock %}

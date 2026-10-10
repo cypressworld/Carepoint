@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Log in · CarePoint{% endblock %}
+{% block content %}
+<section class="auth-card">
+    <p class="eyebrow">Welcome back</p>
+    <h1>Log in to your account</h1>
+    <form method="post" novalidate>
+        {{ form.hidden_tag() }}
+        <label>{{ form.email.label }}{{ form.email(autocomplete="email") }}</label>
+        {% for error in form.email.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+        <label>{{ form.password.label }}{{ form.password(autocomplete="current-password") }}</label>
+        {% for error in form.password.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+        {{ form.submit(class_="button primary full-width") }}
+    </form>
+    <p class="muted">New to CarePoint? <a href="{{ url_for('auth.register') }}">Create a patient account</a>.</p>
+</section>
+{% endblock %}
